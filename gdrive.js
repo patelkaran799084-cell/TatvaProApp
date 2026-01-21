@@ -9,8 +9,8 @@
 //
 // Backup file: TatvaPro_Backup.json
 
-const CLIENT_ID = 'PASTE_YOUR_OAUTH_CLIENT_ID_HERE';
-const API_KEY   = 'PASTE_YOUR_API_KEY_HERE';
+const CLIENT_ID = "945495636870-9uljt6291qui5sjskpnojqqtu1hs9o2g.apps.googleusercontent.com";
+const API_KEY   = "AIzaSyBmk0MvlOyzLMBJHtOpuLRz1izmcZQr7x0";
 const SCOPES    = 'https://www.googleapis.com/auth/drive.file';
 
 let gToken = null;
