@@ -1,11 +1,11 @@
 /*************************************************
- * Tatva Pro - Google Drive (gdrive.js) ✅ FINAL FAST SYNC VERSION
+ * Tatva Pro - Google Drive (gdrive.js) ✅ STABLE VERSION
  *
  * ✅ Drive Login (remember login)
  * ✅ Backup / Restore
- * ✅ Auto Backup (fast)
- * ✅ AUTO SYNC PC ↔ PHONE (every 5 sec check)
- *
+ * ✅ Auto Backup (PHONE SAFE)
+ * ✅ Auto Sync PC ↔ PHONE
+ * ✅ Auto Retry + Auto Re-login on token errors
  *************************************************/
 
 const CLIENT_ID =
@@ -20,9 +20,15 @@ const BACKUP_FILE_NAME = "TatvaPro_Backup.json";
 window.__driveConnected = false;
 window.__driveUserEmail = "";
 window.__driveAccessToken = "";
-window.__requireDriveLogin = false; // optional lock, currently off
+window.__requireDriveLogin = false;
 
-// ---- helpers ----
+// ---- device detect ----
+const __isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+// ---- tuning (mobile safe) ----
+const AUTO_BACKUP_DELAY_MS = __isMobile ? 8000 : 3000; // ✅ phone slow, pc fast
+const AUTO_SYNC_INTERVAL_MS = __isMobile ? 10000 : 5000;
+
 function loadScript(src){
   return new Promise((resolve,reject)=>{
     const s=document.createElement("script");
@@ -88,7 +94,7 @@ async function ensureDriveReady(){
   }
 }
 
-// ---- file search ----
+// ---- find file ----
 async function findBackupFileId(){
   const q = `name='${BACKUP_FILE_NAME}' and trashed=false`;
   const res = await gapi.client.drive.files.list({
@@ -145,6 +151,33 @@ async function updateBackupFile(fileId, contentStr){
   return res.result.id;
 }
 
+// ---- robust errors ----
+function isAuthError(err){
+  const msg = String(err?.message || err || "");
+  return msg.includes("401") || msg.includes("403") || msg.includes("insufficient") || msg.includes("Invalid Credentials");
+}
+
+async function refreshTokenSilently(){
+  try{
+    await ensureGIS();
+    const tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email",
+      callback: (resp)=>{
+        if(resp?.access_token){
+          window.__driveAccessToken = resp.access_token;
+          window.__driveConnected = true;
+          localStorage.setItem("DRIVE_ACCESS_TOKEN", resp.access_token);
+          localStorage.setItem("DRIVE_CONNECTED", "1");
+          gapi.client.setToken({access_token:resp.access_token});
+        }
+      }
+    });
+    tokenClient.requestAccessToken({ prompt: "" }); // silent
+    await new Promise(r=>setTimeout(r, 1200));
+  }catch(e){}
+}
+
 // ---- Drive Login ----
 window.driveLogin = async function(){
   try{
@@ -178,7 +211,6 @@ window.driveLogin = async function(){
         window.updateDriveStatusUI && window.updateDriveStatusUI();
         alert("✅ Drive Login successful");
 
-        // ✅ after login, sync latest
         setTimeout(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), 1200);
       }
     });
@@ -203,21 +235,41 @@ window.driveLogout = function(){
   alert("✅ Logged out");
 };
 
-// ---- Backup ----
+// ---- Backup (with retry) ----
 window.backupToDrive = async function(dataObj){
   if(!window.__driveConnected){ alert("❌ Drive Login first"); return false; }
+
   try{
     await ensureDriveReady();
+
     const contentStr = JSON.stringify(dataObj,null,2);
     const existingId = await findBackupFileId();
+
     if(existingId) await updateBackupFile(existingId, contentStr);
     else await createBackupFile(contentStr);
 
     localStorage.setItem("LAST_AUTO_BACKUP_TS", String(Date.now()));
     window.updateDriveStatusUI && window.updateDriveStatusUI();
     return true;
+
   }catch(err){
-    console.error(err);
+    console.error("Backup error:", err);
+
+    // ✅ Auto re-login then retry once
+    if(isAuthError(err)){
+      await refreshTokenSilently();
+      try{
+        await ensureDriveReady();
+        const contentStr = JSON.stringify(dataObj,null,2);
+        const existingId = await findBackupFileId();
+        if(existingId) await updateBackupFile(existingId, contentStr);
+        else await createBackupFile(contentStr);
+        return true;
+      }catch(e2){
+        console.error("Retry backup error:", e2);
+      }
+    }
+
     alert("❌ Backup failed");
     return false;
   }
@@ -226,6 +278,7 @@ window.backupToDrive = async function(dataObj){
 // ---- Restore ----
 window.restoreFromDrive = async function(){
   if(!window.__driveConnected){ alert("❌ Drive Login first"); return; }
+
   try{
     await ensureDriveReady();
     const fileId = await findBackupFileId();
@@ -241,17 +294,23 @@ window.restoreFromDrive = async function(){
     }else{
       alert("❌ applyBackupObject missing in app.js");
     }
+
   }catch(err){
     console.error(err);
+
+    if(isAuthError(err)){
+      await refreshTokenSilently();
+      alert("⚠️ Token refreshed. Try Restore again.");
+      return;
+    }
+
     alert("❌ Restore failed");
   }
 };
 
-// ---- AUTO BACKUP (FAST MODE) ----
+// ---- AUTO BACKUP (PHONE SAFE) ----
 let __autoBackupTimer = null;
-
-// ✅ FAST: 2 seconds debounce
-window.scheduleAutoBackup = function(delayMs=2000){
+window.scheduleAutoBackup = function(delayMs=AUTO_BACKUP_DELAY_MS){
   try{
     if(!window.__driveConnected) return;
     clearTimeout(__autoBackupTimer);
@@ -268,8 +327,7 @@ window.scheduleAutoBackup = function(delayMs=2000){
   }catch(e){}
 };
 
-// ---- AUTO SYNC PC ↔ PHONE (FAST) ----
-// Every 5 sec check Drive for newer ts, if newer -> restore
+// ---- AUTO SYNC (SAFE) ----
 window.autoSyncFromDrive = async function(){
   try{
     if(!window.__driveConnected) return;
@@ -285,7 +343,6 @@ window.autoSyncFromDrive = async function(){
     const driveTs = Number(backup.ts || 0);
     const localTs = Number(localStorage.getItem("LOCAL_LAST_TS") || "0");
 
-    // ✅ if Drive newer -> restore
     if(driveTs > localTs && window.applyBackupObject){
       console.log("✅ Auto Sync: restoring newer data from Drive");
       window.applyBackupObject(backup);
@@ -296,10 +353,10 @@ window.autoSyncFromDrive = async function(){
   }
 };
 
-// Auto sync when app opens
-setTimeout(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), 1500);
+// on open
+setTimeout(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), 2000);
 
-// ✅ FAST sync polling (every 5 sec)
-setInterval(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), 5000);
+// periodic sync
+setInterval(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), AUTO_SYNC_INTERVAL_MS);
 
-console.log("✅ gdrive.js FINAL FAST loaded");
+console.log("✅ gdrive.js STABLE loaded (mobile safe)");
