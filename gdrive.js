@@ -1,11 +1,10 @@
 /*************************************************
- * Tatva Pro - Google Drive (gdrive.js) ✅ STABLE VERSION
+ * Tatva Pro - Google Drive (gdrive.js)
+ * ✅ LOCKED + STABLE AUTO SYNC VERSION
  *
- * ✅ Drive Login (remember login)
- * ✅ Backup / Restore
- * ✅ Auto Backup (PHONE SAFE)
- * ✅ Auto Sync PC ↔ PHONE
- * ✅ Auto Retry + Auto Re-login on token errors
+ * Fixes:
+ * ✅ Backup failed (concurrent calls problem solved)
+ * ✅ PC ↔ Phone sync stable
  *************************************************/
 
 const CLIENT_ID =
@@ -20,15 +19,19 @@ const BACKUP_FILE_NAME = "TatvaPro_Backup.json";
 window.__driveConnected = false;
 window.__driveUserEmail = "";
 window.__driveAccessToken = "";
-window.__requireDriveLogin = false;
 
-// ---- device detect ----
+// ✅ LOCKS (MAIN FIX)
+let __backupLock = false;
+let __syncLock = false;
+
+// device detect
 const __isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-// ---- tuning (mobile safe) ----
-const AUTO_BACKUP_DELAY_MS = __isMobile ? 8000 : 3000; // ✅ phone slow, pc fast
-const AUTO_SYNC_INTERVAL_MS = __isMobile ? 10000 : 5000;
+// timings
+const AUTO_BACKUP_DELAY_MS = __isMobile ? 9000 : 4000; // stable
+const AUTO_SYNC_INTERVAL_MS = __isMobile ? 12000 : 8000;
 
+// --------------------------------------
 function loadScript(src){
   return new Promise((resolve,reject)=>{
     const s=document.createElement("script");
@@ -37,16 +40,14 @@ function loadScript(src){
     document.head.appendChild(s);
   });
 }
-
 async function ensureGapi(){
   if(!window.gapi) await loadScript("https://apis.google.com/js/api.js");
   return new Promise(res=>gapi.load("client",res));
 }
-
 async function ensureGIS(){
-  if(!window.google || !window.google.accounts) await loadScript("https://accounts.google.com/gsi/client");
+  if(!window.google || !window.google.accounts)
+    await loadScript("https://accounts.google.com/gsi/client");
 }
-
 async function initDriveClient(){
   await ensureGapi();
   await gapi.client.init({
@@ -54,12 +55,10 @@ async function initDriveClient(){
     discoveryDocs:["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"]
   });
 }
-
 function setDriveStatus(txt){
   const el=document.getElementById("driveStatus");
   if(el) el.innerText=txt;
 }
-
 window.updateDriveStatusUI = function(){
   if(window.__driveConnected){
     const em = window.__driveUserEmail ? ` (${window.__driveUserEmail})` : "";
@@ -69,13 +68,12 @@ window.updateDriveStatusUI = function(){
   }
 };
 
-// ---- restore session ----
+// restore session
 (function(){
   try{
     const token = localStorage.getItem("DRIVE_ACCESS_TOKEN") || "";
     const email = localStorage.getItem("DRIVE_USER_EMAIL") || "";
     const ok    = localStorage.getItem("DRIVE_CONNECTED") === "1";
-
     if(ok && token){
       window.__driveAccessToken = token;
       window.__driveUserEmail = email;
@@ -86,7 +84,6 @@ window.updateDriveStatusUI = function(){
   setTimeout(()=>window.updateDriveStatusUI && window.updateDriveStatusUI(),500);
 })();
 
-// ---- ensure drive ready ----
 async function ensureDriveReady(){
   await initDriveClient();
   if(window.__driveAccessToken){
@@ -94,7 +91,7 @@ async function ensureDriveReady(){
   }
 }
 
-// ---- find file ----
+// list file
 async function findBackupFileId(){
   const q = `name='${BACKUP_FILE_NAME}' and trashed=false`;
   const res = await gapi.client.drive.files.list({
@@ -104,7 +101,7 @@ async function findBackupFileId(){
   return files.length ? files[0].id : null;
 }
 
-// ---- upload helpers ----
+// upload helper
 async function createBackupFile(contentStr){
   const boundary="-------314159265358979323846";
   const delimiter="\r\n--"+boundary+"\r\n";
@@ -127,7 +124,6 @@ async function createBackupFile(contentStr){
   const res=await request;
   return res.result.id;
 }
-
 async function updateBackupFile(fileId, contentStr){
   const boundary="-------314159265358979323846";
   const delimiter="\r\n--"+boundary+"\r\n";
@@ -151,34 +147,8 @@ async function updateBackupFile(fileId, contentStr){
   return res.result.id;
 }
 
-// ---- robust errors ----
-function isAuthError(err){
-  const msg = String(err?.message || err || "");
-  return msg.includes("401") || msg.includes("403") || msg.includes("insufficient") || msg.includes("Invalid Credentials");
-}
-
-async function refreshTokenSilently(){
-  try{
-    await ensureGIS();
-    const tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
-      scope: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email",
-      callback: (resp)=>{
-        if(resp?.access_token){
-          window.__driveAccessToken = resp.access_token;
-          window.__driveConnected = true;
-          localStorage.setItem("DRIVE_ACCESS_TOKEN", resp.access_token);
-          localStorage.setItem("DRIVE_CONNECTED", "1");
-          gapi.client.setToken({access_token:resp.access_token});
-        }
-      }
-    });
-    tokenClient.requestAccessToken({ prompt: "" }); // silent
-    await new Promise(r=>setTimeout(r, 1200));
-  }catch(e){}
-}
-
-// ---- Drive Login ----
+// --------------------------------------
+// DRIVE LOGIN
 window.driveLogin = async function(){
   try{
     await initDriveClient();
@@ -211,33 +181,30 @@ window.driveLogin = async function(){
         window.updateDriveStatusUI && window.updateDriveStatusUI();
         alert("✅ Drive Login successful");
 
-        setTimeout(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), 1200);
+        // sync once after login
+        setTimeout(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), 1500);
       }
     });
 
     tokenClient.requestAccessToken({prompt:""});
   }catch(err){
     console.error(err);
-    alert("❌ Drive Login error (OAuth origins / keys check)");
+    alert("❌ Drive Login error");
   }
 };
 
-// ---- Logout ----
-window.driveLogout = function(){
-  window.__driveConnected=false;
-  window.__driveAccessToken="";
-  window.__driveUserEmail="";
-  localStorage.removeItem("DRIVE_ACCESS_TOKEN");
-  localStorage.removeItem("DRIVE_USER_EMAIL");
-  localStorage.removeItem("DRIVE_CONNECTED");
-  try{ gapi.client.setToken(null); }catch(e){}
-  window.updateDriveStatusUI && window.updateDriveStatusUI();
-  alert("✅ Logged out");
-};
-
-// ---- Backup (with retry) ----
+// --------------------------------------
+// BACKUP (LOCKED)
 window.backupToDrive = async function(dataObj){
   if(!window.__driveConnected){ alert("❌ Drive Login first"); return false; }
+
+  // ✅ LOCK
+  if(__backupLock){
+    console.log("⏳ Backup skipped (already running)");
+    return false;
+  }
+
+  __backupLock = true;
 
   try{
     await ensureDriveReady();
@@ -249,33 +216,20 @@ window.backupToDrive = async function(dataObj){
     else await createBackupFile(contentStr);
 
     localStorage.setItem("LAST_AUTO_BACKUP_TS", String(Date.now()));
-    window.updateDriveStatusUI && window.updateDriveStatusUI();
+    console.log("✅ Backup success");
     return true;
 
   }catch(err){
-    console.error("Backup error:", err);
-
-    // ✅ Auto re-login then retry once
-    if(isAuthError(err)){
-      await refreshTokenSilently();
-      try{
-        await ensureDriveReady();
-        const contentStr = JSON.stringify(dataObj,null,2);
-        const existingId = await findBackupFileId();
-        if(existingId) await updateBackupFile(existingId, contentStr);
-        else await createBackupFile(contentStr);
-        return true;
-      }catch(e2){
-        console.error("Retry backup error:", e2);
-      }
-    }
-
+    console.error("❌ Backup failed error:", err);
     alert("❌ Backup failed");
     return false;
+  }finally{
+    __backupLock = false;
   }
 };
 
-// ---- Restore ----
+// --------------------------------------
+// RESTORE
 window.restoreFromDrive = async function(){
   if(!window.__driveConnected){ alert("❌ Drive Login first"); return; }
 
@@ -286,77 +240,75 @@ window.restoreFromDrive = async function(){
 
     const res = await gapi.client.drive.files.get({ fileId, alt:"media" });
     const backup = (typeof res.body==="string") ? JSON.parse(res.body) : res.result;
-    if(!backup){ alert("❌ Invalid backup"); return; }
 
     if(window.applyBackupObject){
       window.applyBackupObject(backup);
       alert("✅ Restore done");
     }else{
-      alert("❌ applyBackupObject missing in app.js");
+      alert("❌ applyBackupObject missing");
     }
-
   }catch(err){
     console.error(err);
-
-    if(isAuthError(err)){
-      await refreshTokenSilently();
-      alert("⚠️ Token refreshed. Try Restore again.");
-      return;
-    }
-
     alert("❌ Restore failed");
   }
 };
 
-// ---- AUTO BACKUP (PHONE SAFE) ----
+// --------------------------------------
+// AUTO BACKUP (LOCKED)
 let __autoBackupTimer = null;
 window.scheduleAutoBackup = function(delayMs=AUTO_BACKUP_DELAY_MS){
   try{
     if(!window.__driveConnected) return;
     clearTimeout(__autoBackupTimer);
+
     __autoBackupTimer = setTimeout(async ()=>{
       try{
         if(typeof collectAppBackupData!=="function") return;
         const obj = collectAppBackupData();
         await window.backupToDrive(obj);
-        console.log("✅ Auto backup done");
       }catch(e){
         console.warn("Auto backup failed:", e);
       }
     }, delayMs);
+
   }catch(e){}
 };
 
-// ---- AUTO SYNC (SAFE) ----
+// --------------------------------------
+// AUTO SYNC (LOCKED)
 window.autoSyncFromDrive = async function(){
-  try{
-    if(!window.__driveConnected) return;
-    await ensureDriveReady();
+  if(!window.__driveConnected) return;
+  if(__syncLock) return;
 
+  __syncLock = true;
+
+  try{
+    await ensureDriveReady();
     const fileId = await findBackupFileId();
     if(!fileId) return;
 
     const res = await gapi.client.drive.files.get({ fileId, alt:"media" });
     const backup = (typeof res.body==="string") ? JSON.parse(res.body) : res.result;
-    if(!backup) return;
 
     const driveTs = Number(backup.ts || 0);
     const localTs = Number(localStorage.getItem("LOCAL_LAST_TS") || "0");
 
     if(driveTs > localTs && window.applyBackupObject){
-      console.log("✅ Auto Sync: restoring newer data from Drive");
+      console.log("✅ Sync restore newer backup");
       window.applyBackupObject(backup);
       localStorage.setItem("LOCAL_LAST_TS", String(driveTs));
     }
   }catch(e){
     console.warn("AutoSync failed:", e);
+  }finally{
+    __syncLock = false;
   }
 };
 
-// on open
-setTimeout(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), 2000);
+// once on open
+setTimeout(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), 2500);
 
-// periodic sync
+// loop sync
 setInterval(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), AUTO_SYNC_INTERVAL_MS);
 
-console.log("✅ gdrive.js STABLE loaded (mobile safe)");
+console.log("✅ gdrive.js LOCKED stable loaded");
