@@ -1,10 +1,11 @@
 /*************************************************
- * Tatva Pro - Google Drive (gdrive.js) ✅ FINAL SYNC VERSION
- * Features:
+ * Tatva Pro - Google Drive (gdrive.js) ✅ FINAL FAST SYNC VERSION
+ *
  * ✅ Drive Login (remember login)
  * ✅ Backup / Restore
- * ✅ Auto Backup (scheduleAutoBackup)
- * ✅ AUTO SYNC PC ↔ PHONE (Auto restore latest when app opens)
+ * ✅ Auto Backup (fast)
+ * ✅ AUTO SYNC PC ↔ PHONE (every 5 sec check)
+ *
  *************************************************/
 
 const CLIENT_ID =
@@ -19,8 +20,9 @@ const BACKUP_FILE_NAME = "TatvaPro_Backup.json";
 window.__driveConnected = false;
 window.__driveUserEmail = "";
 window.__driveAccessToken = "";
-window.__requireDriveLogin = false; // app already works, optional lock
+window.__requireDriveLogin = false; // optional lock, currently off
 
+// ---- helpers ----
 function loadScript(src){
   return new Promise((resolve,reject)=>{
     const s=document.createElement("script");
@@ -34,6 +36,7 @@ async function ensureGapi(){
   if(!window.gapi) await loadScript("https://apis.google.com/js/api.js");
   return new Promise(res=>gapi.load("client",res));
 }
+
 async function ensureGIS(){
   if(!window.google || !window.google.accounts) await loadScript("https://accounts.google.com/gsi/client");
 }
@@ -50,6 +53,7 @@ function setDriveStatus(txt){
   const el=document.getElementById("driveStatus");
   if(el) el.innerText=txt;
 }
+
 window.updateDriveStatusUI = function(){
   if(window.__driveConnected){
     const em = window.__driveUserEmail ? ` (${window.__driveUserEmail})` : "";
@@ -73,7 +77,7 @@ window.updateDriveStatusUI = function(){
       console.log("✅ Drive session restored");
     }
   }catch(e){}
-  setTimeout(()=>window.updateDriveStatusUI && window.updateDriveStatusUI(),800);
+  setTimeout(()=>window.updateDriveStatusUI && window.updateDriveStatusUI(),500);
 })();
 
 // ---- ensure drive ready ----
@@ -84,6 +88,7 @@ async function ensureDriveReady(){
   }
 }
 
+// ---- file search ----
 async function findBackupFileId(){
   const q = `name='${BACKUP_FILE_NAME}' and trashed=false`;
   const res = await gapi.client.drive.files.list({
@@ -93,6 +98,7 @@ async function findBackupFileId(){
   return files.length ? files[0].id : null;
 }
 
+// ---- upload helpers ----
 async function createBackupFile(contentStr){
   const boundary="-------314159265358979323846";
   const delimiter="\r\n--"+boundary+"\r\n";
@@ -169,10 +175,10 @@ window.driveLogin = async function(){
           localStorage.setItem("DRIVE_USER_EMAIL", window.__driveUserEmail);
         }catch(e){}
 
-        alert("✅ Drive Login successful");
         window.updateDriveStatusUI && window.updateDriveStatusUI();
+        alert("✅ Drive Login successful");
 
-        // ✅ auto sync latest from Drive after login
+        // ✅ after login, sync latest
         setTimeout(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), 1200);
       }
     });
@@ -229,7 +235,6 @@ window.restoreFromDrive = async function(){
     const backup = (typeof res.body==="string") ? JSON.parse(res.body) : res.result;
     if(!backup){ alert("❌ Invalid backup"); return; }
 
-    // ✅ apply using app.js helper
     if(window.applyBackupObject){
       window.applyBackupObject(backup);
       alert("✅ Restore done");
@@ -242,9 +247,11 @@ window.restoreFromDrive = async function(){
   }
 };
 
-// ---- AUTO BACKUP ----
+// ---- AUTO BACKUP (FAST MODE) ----
 let __autoBackupTimer = null;
-window.scheduleAutoBackup = function(delayMs=8000){
+
+// ✅ FAST: 2 seconds debounce
+window.scheduleAutoBackup = function(delayMs=2000){
   try{
     if(!window.__driveConnected) return;
     clearTimeout(__autoBackupTimer);
@@ -261,8 +268,8 @@ window.scheduleAutoBackup = function(delayMs=8000){
   }catch(e){}
 };
 
-// ---- AUTO SYNC PC ↔ PHONE ----
-// When app opens, if Drive has newer backup -> auto restore
+// ---- AUTO SYNC PC ↔ PHONE (FAST) ----
+// Every 5 sec check Drive for newer ts, if newer -> restore
 window.autoSyncFromDrive = async function(){
   try{
     if(!window.__driveConnected) return;
@@ -278,7 +285,7 @@ window.autoSyncFromDrive = async function(){
     const driveTs = Number(backup.ts || 0);
     const localTs = Number(localStorage.getItem("LOCAL_LAST_TS") || "0");
 
-    // ✅ only restore if Drive is newer
+    // ✅ if Drive newer -> restore
     if(driveTs > localTs && window.applyBackupObject){
       console.log("✅ Auto Sync: restoring newer data from Drive");
       window.applyBackupObject(backup);
@@ -289,7 +296,10 @@ window.autoSyncFromDrive = async function(){
   }
 };
 
-// Auto sync when app opens (if already logged in)
-setTimeout(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), 2500);
+// Auto sync when app opens
+setTimeout(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), 1500);
 
-console.log("✅ gdrive.js FINAL SYNC loaded");
+// ✅ FAST sync polling (every 5 sec)
+setInterval(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), 5000);
+
+console.log("✅ gdrive.js FINAL FAST loaded");
