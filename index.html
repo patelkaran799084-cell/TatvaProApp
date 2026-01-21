@@ -1,131 +1,141 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
-<title>Tatva OS Pro</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tatva OS Pro</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#263646" />
+  <link rel="stylesheet" href="style.css" />
+</head>
 
-<link href="style.css" rel="stylesheet"/><link href="manifest.json" rel="manifest"/><meta content="#111827" name="theme-color"/></head>
 <body>
-<div id="screen-home">
-<div class="header">
-<h2>🟠 Tatva OS Pro</h2>
-<div>
-<button class="btn-icon" onclick="openTeamMgr()">👥 Team</button><button class="btn-icon" onclick="gdriveLogin()">🔐 Drive Login</button><button class="btn-icon" onclick="gdriveBackup()">☁ Backup</button><button class="btn-icon" onclick="gdriveRestore()">☁ Restore</button>
-<button class="btn-icon" onclick="backupData()">⬇ Save</button>
-<input id="fileInput" onchange="restoreData(this)" style="display:none" type="file"/>
-<button class="btn-icon" onclick="document.getElementById('fileInput').click()">⬆ Load</button>
-<div id="driveStatus" style="margin-top:6px;font-size:12px;opacity:0.85;">Drive: Not connected</div></div>
-</div>
-<div class="container">
-<div class="grid-4">
-<div class="card">
-<h3 id="st-orders">0</h3>
-<p>Orders</p>
-</div>
-<div class="card profit">
-<h3 id="st-profit">₹0</h3>
-<p>Net Profit</p>
-</div>
-<div class="card">
-<h3 id="st-rev" style="color:#3498db">₹0</h3>
-<p>Revenue</p>
-</div>
-<div class="card">
-<h3 id="st-hand" style="color:#e74c3c">₹0</h3>
-<p>Cash Hand</p>
-</div>
-</div>
-<div class="list-header">Recent Orders</div>
-<div id="orders-list"></div>
-<div style="height: 60px;"></div> </div>
-<button class="fab" onclick="openNewOrder()">+</button>
-</div>
-<div class="modal" id="modal-new">
-<div class="modal-header">
-<button class="btn-icon" onclick="closeModal('modal-new')" style="background:#eee; color:#333">Cancel</button>
-<h3>New Order</h3>
-<div></div>
-</div>
-<div class="modal-body">
-<div class="section">
-<label>Client Name</label>
-<input id="new-client" placeholder="e.g. Ramesh Bhai" type="text"/>
-<label>Work Description</label>
-<input id="new-work" placeholder="e.g. Temple Model" type="text"/>
-<label>Total Deal Price (₹)</label>
-<input id="new-price" placeholder="0" type="number"/>
-<label>Date</label>
-<input id="new-date" type="date"/>
-<button class="btn btn-primary" onclick="createOrder()">Create Order</button>
-</div>
-</div>
-</div>
-<div class="modal" id="modal-detail">
-<div class="modal-header">
-<button class="btn-icon" onclick="closeModal('modal-detail')" style="background:#eee; color:#333">← Back</button>
-<button class="btn-icon" onclick="markDone()" style="background:#27ae60;">✅ Done</button>
-<button class="btn-icon" onclick="deleteOrder()" style="background:#c0392b;">Del</button>
-</div>
-<div class="modal-body">
-<div class="cashflow">
-<div class="cf-box cf-green"><span>Recd</span><b id="d-recd">0</b></div>
-<div class="cf-box cf-red"><span>Paid</span><b id="d-paid">0</b></div>
-<div class="cf-box cf-blue"><span>Net Hand</span><b id="d-hand">0</b></div>
-</div>
-<div class="section">
-<div class="sec-title">📦 Order Info</div>
-<h2 id="d-client" style="margin:0; color:#2c3e50">Client Name</h2>
-<div id="d-work" style="color:#7f8c8d; font-size:14px; margin-top:5px;">Work</div>
-<div id="d-date" style="font-size:12px; color:#999; margin-top:5px;">Date</div>
-</div>
-<div class="section">
-<div class="sec-title" style="display:flex; justify-content:space-between;">
-<span>💰 Client Payment</span>
-<span id="d-pending" style="color:red">Pending: 0</span>
-</div>
-<div style="background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:10px;">
-<div class="row-inputs">
-<input id="pay-in-amt" placeholder="Amount" style="margin:0" type="number"/>
-<button class="btn btn-success btn-sm" onclick="addIncome()">Receive</button>
-</div>
-</div>
-<div id="list-income"></div>
-</div>
-<div class="section">
-<div class="sec-title">🛠 Expenses (Team &amp; Material)</div>
-<div style="background:#e3f2fd; padding:10px; border-radius:8px; margin-bottom:15px;">
-<div class="row-inputs" style="margin-bottom:5px;">
-<select id="task-type" style="margin:0">
-<option>Model</option><option>Print</option><option>Color</option><option>Other</option>
-</select>
-<select id="task-artist" style="margin:0"></select>
-</div>
-<div class="row-inputs">
-<input id="task-cost" placeholder="Cost" style="margin:0" type="number"/>
-<button class="btn btn-blue btn-sm" onclick="addTask()">Add</button>
-</div>
-</div>
-<div id="list-tasks"></div>
-</div>
-</div>
-</div>
-<div class="overlay" id="overlay-team">
-<div class="overlay-content">
-<h3>👥 Manage Team</h3>
-<div class="row-inputs">
-<input id="team-new" placeholder="Name" style="margin:0" type="text"/>
-<button class="btn btn-primary btn-sm" onclick="addTeam()">Add</button>
-</div>
-<div id="list-team" style="margin-top:15px; max-height:200px; overflow-y:auto;"></div>
-<button class="btn btn-sm" onclick="document.getElementById('overlay-team').style.display='none'" style="background:#ccc; color:#333; margin-top:15px;">Close</button>
-</div>
-</div>
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <span class="title">Tatva OS Pro</span>
+    </div>
 
-<script src="gdrive.js"></script><script src="app.js"></script><script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js'));
-}
-</script></body>
+    <div class="actions">
+      <button class="btn-top" onclick="openTeamMgr()">👥 Team</button>
+
+      <!-- ✅ GOOGLE DRIVE BUTTONS -->
+      <button class="btn-top" onclick="driveLogin()">🔐 Drive Login</button>
+      <button class="btn-top" onclick="backupToDrive(collectAppBackupData())">☁ Backup</button>
+      <button class="btn-top" onclick="restoreFromDrive()">☁ Restore</button>
+
+      <!-- ✅ LOCAL SAVE/LOAD -->
+      <button class="btn-top" onclick="backupData()">⬇ Save</button>
+      <label class="btn-top" style="cursor:pointer;">
+        ⬆ Load
+        <input type="file" id="restore-file" accept=".json" style="display:none"
+               onchange="restoreData(this)" />
+      </label>
+    </div>
+  </div>
+
+  <!-- ✅ DRIVE STATUS -->
+  <div id="driveStatus" style="font-size:12px;color:#ddd;margin:6px 14px;">
+    Drive: Not connected
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="container">
+    <div class="stats">
+      <div class="stat-card"><div id="st-orders">0</div><small>Orders</small></div>
+      <div class="stat-card"><div id="st-profit">₹0</div><small>Net Profit</small></div>
+      <div class="stat-card"><div id="st-rev">₹0</div><small>Revenue</small></div>
+      <div class="stat-card"><div id="st-hand">₹0</div><small>Cash Hand</small></div>
+    </div>
+
+    <h3 class="section-title">RECENT ORDERS</h3>
+    <div id="orders-list"></div>
+  </div>
+
+  <!-- FLOATING + BUTTON -->
+  <button class="fab" onclick="openNewOrder()">+</button>
+
+  <!-- NEW ORDER MODAL -->
+  <div id="modal-new" class="modal">
+    <div class="modal-box">
+      <h3>New Order</h3>
+      <input id="new-client" placeholder="Client Name" />
+      <input id="new-work" placeholder="Work Details" />
+      <input id="new-price" type="number" placeholder="Price" />
+      <input id="new-date" type="date" />
+      <div class="row">
+        <button class="btn btn-blue" onclick="createOrder()">Create</button>
+        <button class="btn" onclick="closeModal('modal-new')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DETAIL MODAL -->
+  <div id="modal-detail" class="modal">
+    <div class="modal-box big">
+      <div class="detail-head">
+        <div>
+          <h3 id="d-client">Client</h3>
+          <div id="d-work" style="font-size:13px;color:#666;"></div>
+          <div id="d-date" style="font-size:12px;color:#999;"></div>
+        </div>
+        <button class="btn btn-red btn-sm" onclick="deleteOrder()">Delete</button>
+      </div>
+
+      <div class="strip">
+        <div><small>Received</small><b id="d-recd">₹0</b></div>
+        <div><small>Paid Out</small><b id="d-paid">₹0</b></div>
+        <div><small>Cash Hand</small><b id="d-hand">₹0</b></div>
+      </div>
+
+      <div id="d-pending" class="pending"></div>
+
+      <h4>Income</h4>
+      <div class="row-inputs">
+        <input id="pay-in-amt" type="number" placeholder="Amount" />
+        <button class="btn btn-blue btn-sm" onclick="addIncome()">Add</button>
+      </div>
+      <div id="list-income"></div>
+
+      <h4>Expenses / Tasks</h4>
+      <div class="row-inputs">
+        <select id="task-type">
+          <option value="Photo">Photo</option>
+          <option value="Video">Video</option>
+          <option value="Design">Design</option>
+          <option value="Other">Other</option>
+        </select>
+        <select id="task-artist"></select>
+        <input id="task-cost" type="number" placeholder="Cost" />
+        <button class="btn btn-blue btn-sm" onclick="addTask()">Add</button>
+      </div>
+      <div id="list-tasks"></div>
+
+      <div class="row">
+        <button class="btn btn-green" onclick="markDone()">Auto Settle</button>
+        <button class="btn" onclick="closeModal('modal-detail')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TEAM MODAL -->
+  <div id="overlay-team" class="overlay" style="display:none;">
+    <div class="modal-box">
+      <h3>Team</h3>
+      <div id="list-team"></div>
+      <div class="row-inputs">
+        <input id="team-new" placeholder="New Member" />
+        <button class="btn btn-blue btn-sm" onclick="addTeam()">Add</button>
+      </div>
+      <div class="row">
+        <button class="btn" onclick="document.getElementById('overlay-team').style.display='none'">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ✅ IMPORTANT: scripts order -->
+  <script src="app.js"></script>
+  <script src="gdrive.js"></script>
+</body>
 </html>
