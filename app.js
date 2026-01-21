@@ -2,22 +2,25 @@
 window.db = JSON.parse(localStorage.getItem('tatva_pro_db')) || { orders: [], team: ['Self'] };
 window.currentId = null;
 
-// ✅ track local data timestamp (for auto sync)
+// ✅ flags to prevent sync overwrite
+window.__isRestoring = false;
 if(!localStorage.getItem("LOCAL_LAST_TS")) localStorage.setItem("LOCAL_LAST_TS", "0");
 
 // --- SAVE DB ---
 function saveDB() {
     localStorage.setItem('tatva_pro_db', JSON.stringify(db));
 
-    // ✅ update local timestamp every change
+    // ✅ update local timestamp every real change
     localStorage.setItem("LOCAL_LAST_TS", String(Date.now()));
 
     renderHome();
     if(currentId) renderDetail();
 
-    // ✅ AUTO BACKUP trigger (Drive connected hoy to)
+    // ✅ AUTO BACKUP only if NOT restoring
     try{
-        if(window.scheduleAutoBackup) window.scheduleAutoBackup(6000);
+        if(!window.__isRestoring && window.scheduleAutoBackup){
+            window.scheduleAutoBackup(2000);
+        }
     }catch(e){}
 }
 
@@ -25,16 +28,13 @@ function saveDB() {
 function renderHome() {
     let totalRev = 0, totalExp = 0, totalRecd = 0, totalPaid = 0;
     let html = '';
-    
-    // Sort Newest First
     let sorted = [...db.orders].sort((a,b) => b.id - a.id);
 
     sorted.forEach(o => {
-        // Calcs
         let recd = (o.income || []).reduce((s,x) => s + x.amt, 0);
         let exp = (o.tasks || []).reduce((s,t) => s + t.cost, 0);
         let paid = (o.tasks || []).reduce((s,t) => s + (t.payouts || []).reduce((p,x)=>p+x.amt,0), 0);
-        
+
         totalRev += o.price;
         totalExp += exp;
         totalRecd += recd;
@@ -61,8 +61,9 @@ function renderHome() {
         </div>`;
     });
 
-    document.getElementById('orders-list').innerHTML = html || '<div style="text-align:center;color:#aaa;margin-top:20px;">No Orders Yet</div>';
-    
+    document.getElementById('orders-list').innerHTML =
+      html || '<div style="text-align:center;color:#aaa;margin-top:20px;">No Orders Yet</div>';
+
     document.getElementById('st-orders').innerText = db.orders.length;
     document.getElementById('st-profit').innerText = "₹" + (totalRev - totalExp);
     document.getElementById('st-rev').innerText = "₹" + totalRev;
@@ -100,8 +101,7 @@ function createOrder() {
 function openDetail(id) {
     currentId = id;
     renderDetail();
-    
-    // Populate Artist Dropdown
+
     let sel = document.getElementById('task-artist');
     sel.innerHTML = '';
     db.team.forEach(t => {
@@ -117,23 +117,21 @@ function renderDetail() {
     let o = db.orders.find(x => x.id === currentId);
     if(!o) return closeModal('modal-detail');
 
-    // Header
     document.getElementById('d-client').innerText = o.client;
     document.getElementById('d-work').innerText = o.work;
     document.getElementById('d-date').innerText = o.date;
 
-    // Income Logic
     let recd = (o.income || []).reduce((s,x) => s + x.amt, 0);
     let pending = o.price - recd;
     document.getElementById('d-pending').innerText = pending <= 0 ? "Full Paid" : `Pending: ₹${pending}`;
-    
+
     let incHtml = '';
     (o.income || []).forEach((inc, idx) => {
-        incHtml += `<div class="list-item"><span>${inc.date}</span> <b>+ ₹${inc.amt}</b> <span class="del-x" onclick="delInc(${idx})">×</span></div>`;
+        incHtml += `<div class="list-item"><span>${inc.date}</span> <b>+ ₹${inc.amt}</b>
+        <span class="del-x" onclick="delInc(${idx})">×</span></div>`;
     });
     document.getElementById('list-income').innerHTML = incHtml;
 
-    // Expenses Logic
     let expHtml = '';
     let totalPaidOut = 0;
 
@@ -141,10 +139,11 @@ function renderDetail() {
         let tPaid = (t.payouts || []).reduce((s,x) => s + x.amt, 0);
         totalPaidOut += tPaid;
         let tDue = t.cost - tPaid;
-        
+
         let payHist = '';
         (t.payouts || []).forEach((p, pIdx) => {
-            payHist += `<div class="list-item" style="color:#666; font-size:11px; padding-left:10px;">• ${p.date}: ₹${p.amt} <span class="del-x" onclick="delTaskPay(${tIdx}, ${pIdx})">×</span></div>`;
+            payHist += `<div class="list-item" style="color:#666; font-size:11px; padding-left:10px;">
+            • ${p.date}: ₹${p.amt} <span class="del-x" onclick="delTaskPay(${tIdx}, ${pIdx})">×</span></div>`;
         });
 
         expHtml += `
@@ -168,7 +167,6 @@ function renderDetail() {
     });
     document.getElementById('list-tasks').innerHTML = expHtml;
 
-    // Strip Stats
     document.getElementById('d-recd').innerText = "₹" + recd;
     document.getElementById('d-paid').innerText = "₹" + totalPaidOut;
     document.getElementById('d-hand').innerText = "₹" + (recd - totalPaidOut);
@@ -232,14 +230,13 @@ function markDone() {
     if(!confirm("Auto-Settle Everything?")) return;
     let o = db.orders.find(x => x.id === currentId);
     let today = new Date().toLocaleDateString('en-GB') + " (Auto)";
-    
-    // Client
+
     let recd = (o.income || []).reduce((s,x) => s+x.amt, 0);
     if(o.price > recd) {
         if(!o.income) o.income = [];
         o.income.push({ amt: o.price - recd, date: today });
     }
-    // Artists
+
     (o.tasks || []).forEach(t => {
         let paid = (t.payouts || []).reduce((s,x) => s+x.amt, 0);
         if(t.cost > paid) {
@@ -271,7 +268,7 @@ function addTeam() {
     if(nm && !db.team.includes(nm)) {
         db.team.push(nm);
         saveDB();
-        openTeamMgr(); // refresh
+        openTeamMgr();
         document.getElementById('team-new').value = '';
     }
 }
@@ -280,10 +277,9 @@ function delTeam(i) {
     saveDB();
     openTeamMgr();
 }
-
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-// --- BACKUP (Local File Backup) ---
+// --- BACKUP LOCAL ---
 function backupData() {
     let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
     let node = document.createElement('a');
@@ -308,25 +304,35 @@ function restoreData(input) {
 renderHome();
 
 /* ===========================================================
-   ✅ DRIVE SYNC SUPPORT
+   ✅ DRIVE SYNC SUPPORT (SAFE)
    =========================================================== */
 
-// ✅ used by Drive backup
+// ✅ drive backup object
 window.collectAppBackupData = function(){
     return { app:"TatvaPro", version:1, ts: Date.now(), db: db };
 };
 
-// ✅ apply Drive restore without breaking UI
+// ✅ apply drive restore WITHOUT triggering auto backup loop
 window.applyBackupObject = function(backup){
     if(backup && backup.db){
+        window.__isRestoring = true;
+
         db = backup.db;
-        saveDB();
+        localStorage.setItem('tatva_pro_db', JSON.stringify(db));
+
+        // ✅ IMPORTANT: set LOCAL_LAST_TS = Drive ts (prevents overwrite loop)
+        localStorage.setItem("LOCAL_LAST_TS", String(backup.ts || Date.now()));
+
+        renderHome();
+        if(currentId) renderDetail();
+
+        setTimeout(()=>{ window.__isRestoring = false; }, 1200);
     }
 };
 
-// ✅ on app open: Auto restore latest Drive backup if it is newer
+// ✅ on open: auto sync
 setTimeout(() => {
     try{
         if(window.autoSyncFromDrive) window.autoSyncFromDrive();
     }catch(e){}
-}, 2500);
+}, 2000);
