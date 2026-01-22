@@ -1,27 +1,30 @@
 /*******************************************************
- * Tatva Pro - app.js (FINAL)
- * ✅ Multi Business Profiles
- * ✅ Business owner email filter
- * ✅ Admin PIN only for add/rename/delete business
+ * Tatva OS Pro - app.js (FINAL ADMIN LOCK + EMAIL LOGIN)
+ * ✅ Email based login required (Drive)
+ * ✅ Admin only Business Manager button
+ * ✅ Multi business profiles (owner email)
  *******************************************************/
 
-// 🔐 Change this PIN (only you know)
-const ADMIN_PIN = "2580";
+// 🔐 Admin config
+const ADMIN_EMAIL = "patelkaran799084@gmail.com";
+const ADMIN_PIN = "2580"; // change if needed
 
-// meta storage
 const BIZ_META_KEY = "tatva_biz_meta_v3";
 
 // email from drive login (set in gdrive.js)
 function getLoggedEmail() {
   return (window.__driveUserEmail || "").toLowerCase().trim();
 }
+function isAdmin() {
+  return getLoggedEmail() === ADMIN_EMAIL.toLowerCase();
+}
 
-// Default meta: 1 business (no owner email until admin sets)
+// Default meta: 1 business owned by admin
 function defaultMeta() {
   return {
     activeBizId: "biz_main",
     businesses: [
-      { id: "biz_main", name: "Main Business", ownerEmail: "" }
+      { id: "biz_main", name: "Main Business", ownerEmail: ADMIN_EMAIL.toLowerCase() }
     ]
   };
 }
@@ -34,13 +37,9 @@ function loadBizMeta() {
   }
   return meta;
 }
-function saveBizMeta(meta) {
-  localStorage.setItem(BIZ_META_KEY, JSON.stringify(meta));
-}
+function saveBizMeta(meta) { localStorage.setItem(BIZ_META_KEY, JSON.stringify(meta)); }
 
-function getDBKey(bizId) {
-  return `tatva_pro_db__${bizId}`;
-}
+function getDBKey(bizId) { return `tatva_pro_db__${bizId}`; }
 
 function emptyDB() {
   return {
@@ -50,7 +49,6 @@ function emptyDB() {
   };
 }
 
-// ✅ business wise Drive backup filename
 window.getActiveDriveBackupFileName = function () {
   const meta = loadBizMeta();
   const biz = meta.businesses.find(b => b.id === meta.activeBizId);
@@ -58,30 +56,17 @@ window.getActiveDriveBackupFileName = function () {
   return `TatvaPro_${safeName}_Backup.json`;
 };
 
-// Visible businesses: if logged in -> filter by ownerEmail, else show all
 function getVisibleBusinesses() {
   const meta = loadBizMeta();
   const email = getLoggedEmail();
-
-  // Not logged in => show all (local usage), but cannot manage
-  if (!email) return meta.businesses;
-
-  // Only owner businesses
-  return meta.businesses.filter(b => {
-    const own = (b.ownerEmail || "").toLowerCase().trim();
-    return own && own === email;
-  });
+  if (!email) return []; // ✅ locked
+  return meta.businesses.filter(b => (b.ownerEmail || "").toLowerCase().trim() === email);
 }
 
-// Ensure active business valid/visible
 function ensureActiveBizVisible() {
   const meta = loadBizMeta();
   const visible = getVisibleBusinesses();
-
-  if (visible.length === 0) {
-    // If no match, keep existing active
-    return;
-  }
+  if (visible.length === 0) return;
 
   const ok = visible.some(b => b.id === meta.activeBizId);
   if (!ok) {
@@ -90,11 +75,8 @@ function ensureActiveBizVisible() {
   }
 }
 
-function getActiveBizId() {
-  return loadBizMeta().activeBizId;
-}
+function getActiveBizId() { return loadBizMeta().activeBizId; }
 
-// Business dropdown
 window.renderBizDropdown = function () {
   ensureActiveBizVisible();
   const meta = loadBizMeta();
@@ -103,8 +85,16 @@ window.renderBizDropdown = function () {
   if (!sel) return;
   sel.innerHTML = "";
 
-  // If logged-in and no business found:
-  if (getLoggedEmail() && visible.length === 0) {
+  if (!getLoggedEmail()) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.text = "🔐 Login required";
+    sel.add(opt);
+    sel.value = "";
+    return;
+  }
+
+  if (visible.length === 0) {
     const opt = document.createElement("option");
     opt.value = "";
     opt.text = "❌ No business for this email";
@@ -120,18 +110,17 @@ window.renderBizDropdown = function () {
     sel.add(opt);
   });
 
-  // active
   const activeInVisible = visible.some(b => b.id === meta.activeBizId);
-  sel.value = activeInVisible ? meta.activeBizId : (visible[0]?.id || meta.activeBizId);
+  sel.value = activeInVisible ? meta.activeBizId : (visible[0].id);
 };
 
-// switch business
 window.switchBusinessFromUI = function () {
   const sel = document.getElementById("bizSelect");
   if (!sel || !sel.value) return;
   const meta = loadBizMeta();
   meta.activeBizId = sel.value;
   saveBizMeta(meta);
+
   loadDBForActiveBusiness();
   renderHome();
 };
@@ -144,20 +133,24 @@ window.__isRestoring = false;
 if (!localStorage.getItem("LOCAL_LAST_TS")) localStorage.setItem("LOCAL_LAST_TS", "0");
 
 window.loadDBForActiveBusiness = function () {
+  if (!getLoggedEmail()) return;
+
   ensureActiveBizVisible();
   window.renderBizDropdown();
 
   const bizId = getActiveBizId();
   const key = getDBKey(bizId);
   const stored = JSON.parse(localStorage.getItem(key) || "null");
-  db = stored || emptyDB();
 
+  db = stored || emptyDB();
   db.orders ||= [];
   db.team ||= ["Self"];
   db.categories ||= ["Model", "Print", "Color", "Material", "Other"];
 };
 
 function saveDB() {
+  if (!getLoggedEmail()) return;
+
   const bizId = getActiveBizId();
   const key = getDBKey(bizId);
 
@@ -174,11 +167,44 @@ function saveDB() {
   } catch (e) {}
 }
 
-function closeModal(id) { document.getElementById(id).style.display = "none"; }
+window.closeModal = function (id) { document.getElementById(id).style.display = "none"; };
 function money(n) { return "₹" + Number(n || 0); }
+
+// ADMIN UI
+function updateAdminUI() {
+  const btn = document.getElementById("btnBiz");
+  if (btn) btn.style.display = isAdmin() ? "inline-flex" : "none";
+}
+
+// LOCK UI
+function lockAppUI(locked) {
+  const lock = document.getElementById("loginLock");
+  const app = document.getElementById("mainApp");
+  const fab = document.getElementById("fabBtn");
+
+  if (locked) {
+    if (lock) { lock.style.display = "flex"; lock.style.alignItems="center"; lock.style.justifyContent="center"; }
+    if (app) app.style.display = "none";
+    if (fab) fab.style.display = "none";
+  } else {
+    if (lock) lock.style.display = "none";
+    if (app) app.style.display = "block";
+    if (fab) fab.style.display = "flex";
+  }
+}
+
+window.onDriveLoginSuccess = function () {
+  lockAppUI(false);
+  updateAdminUI();
+  loadDBForActiveBusiness();
+  renderBizDropdown();
+  renderHome();
+};
 
 // HOME
 function renderHome() {
+  if (!getLoggedEmail()) return;
+
   let totalRev = 0, totalExp = 0, totalRecd = 0, totalPaid = 0;
   let html = "";
 
@@ -224,6 +250,7 @@ function renderHome() {
 
 // New order
 window.openNewOrder = function () {
+  if (!getLoggedEmail()) return alert("Drive Login first!");
   document.getElementById("new-client").value = "";
   document.getElementById("new-work").value = "";
   document.getElementById("new-price").value = "";
@@ -253,7 +280,6 @@ window.createOrder = function () {
 // DETAIL
 window.openDetail = function (id) {
   currentId = id;
-
   fillOrderDropdown();
   document.getElementById("orderSelect").value = String(id);
   fillTeamDropdown();
@@ -328,7 +354,6 @@ function renderDetail() {
   let pending = o.price - recd;
   document.getElementById("d-pending").innerText = pending <= 0 ? "Full Paid" : `Pending: ₹${pending}`;
 
-  // income list
   let incHtml = "";
   (o.income || []).forEach((inc, idx) => {
     incHtml += `<div class="list-item"><span>${inc.date}</span><b>+ ₹${inc.amt}</b>
@@ -336,7 +361,6 @@ function renderDetail() {
   });
   document.getElementById("list-income").innerHTML = incHtml;
 
-  // tasks
   let expHtml = "";
   let totalPaidOut = 0;
 
@@ -479,6 +503,7 @@ window.deleteOrder = function () {
 
 // Team
 window.openTeamMgr = function () {
+  if (!getLoggedEmail()) return;
   let html = "";
   db.team.forEach((t, i) => {
     if (t !== "Self") {
@@ -506,6 +531,7 @@ window.delTeam = function (i) {
 
 // Category
 window.openCategoryMgr = function () {
+  if (!getLoggedEmail()) return;
   let html = "";
   (db.categories || []).forEach((c, i) => {
     html += `<div class="list-item"><span>${c}</span>
@@ -537,6 +563,8 @@ window.delCategory = function (i) {
 
 // Local backup (business wise filename)
 window.backupData = function () {
+  if (!getLoggedEmail()) return alert("Drive Login first!");
+
   const meta = loadBizMeta();
   const biz = meta.businesses.find(b => b.id === meta.activeBizId);
   const safeName = (biz?.name || "Business").replace(/[^a-z0-9]/gi, "_");
@@ -550,7 +578,9 @@ window.backupData = function () {
   node.click();
   node.remove();
 };
+
 window.restoreData = function (input) {
+  if (!getLoggedEmail()) return alert("Drive Login first!");
   let file = input.files[0];
   let reader = new FileReader();
   reader.onload = function (e) {
@@ -568,9 +598,14 @@ window.restoreData = function (input) {
 let __bizAdminUnlocked = false;
 
 window.openBusinessMgr = function () {
+  if (!isAdmin()) {
+    alert("❌ Only Admin can manage businesses.");
+    return;
+  }
+
   document.getElementById("overlay-biz").style.display = "flex";
   document.getElementById("biz-info").innerText =
-    `Logged in email: ${getLoggedEmail() || "Not logged in"} (Drive Login required to filter businesses)`;
+    `Logged in: ${getLoggedEmail()} (Admin)`;
 
   document.getElementById("biz-panel").style.display = "none";
   document.getElementById("biz-pin").value = "";
@@ -625,13 +660,12 @@ window.addBusiness = function () {
   meta.activeBizId = id;
   saveBizMeta(meta);
 
-  // init db for new biz
   localStorage.setItem(getDBKey(id), JSON.stringify(emptyDB()));
 
   document.getElementById("biz-new-name").value = "";
   document.getElementById("biz-new-owner").value = "";
 
-  window.loadDBForActiveBusiness();
+  loadDBForActiveBusiness();
   renderHome();
   renderBizManagerList();
 };
@@ -645,7 +679,7 @@ window.renameBusiness = function (bizId) {
   biz.name = nm.trim();
   saveBizMeta(meta);
 
-  window.renderBizDropdown();
+  renderBizDropdown();
   renderBizManagerList();
 };
 
@@ -654,7 +688,7 @@ window.setActiveBusiness = function (bizId) {
   meta.activeBizId = bizId;
   saveBizMeta(meta);
 
-  window.loadDBForActiveBusiness();
+  loadDBForActiveBusiness();
   renderHome();
   if (__bizAdminUnlocked) renderBizManagerList();
 };
@@ -669,19 +703,17 @@ window.deleteBusiness = function (bizId) {
   meta.businesses = meta.businesses.filter(b => b.id !== bizId);
   localStorage.removeItem(getDBKey(bizId));
 
-  if (meta.activeBizId === bizId) {
-    meta.activeBizId = meta.businesses[0].id;
-  }
+  if (meta.activeBizId === bizId) meta.activeBizId = meta.businesses[0].id;
   saveBizMeta(meta);
 
-  window.loadDBForActiveBusiness();
+  loadDBForActiveBusiness();
   renderHome();
   renderBizManagerList();
 };
 
 // Drive sync helpers
 window.collectAppBackupData = function () {
-  return { app: "TatvaPro", version: 30, ts: Date.now(), bizId: getActiveBizId(), db: db };
+  return { app: "TatvaPro", version: 40, ts: Date.now(), bizId: getActiveBizId(), db: db };
 };
 
 window.applyBackupObject = function (backup) {
@@ -704,7 +736,16 @@ window.applyBackupObject = function (backup) {
   }
 };
 
-// INIT
-window.loadDBForActiveBusiness();
-window.renderBizDropdown();
-renderHome();
+// INIT (lock until login)
+(function init() {
+  updateAdminUI();
+  renderBizDropdown();
+
+  if (!getLoggedEmail()) {
+    lockAppUI(true);
+  } else {
+    lockAppUI(false);
+    loadDBForActiveBusiness();
+    renderHome();
+  }
+})();
