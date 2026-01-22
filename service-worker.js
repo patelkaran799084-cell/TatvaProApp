@@ -1,35 +1,32 @@
-
-const CACHE_NAME = 'tatvapro-v1';
+// service-worker.js
+const CACHE_NAME = "tatva-pro-v9"; // ✅ every update increase v number
 const ASSETS = [
-  './',
-  './index.html',
-  './style.css',
-  './app.js',
-  './gdrive.js',
-  './manifest.json',
-  './icons/icon-192.png',
-  './icons/icon-512.png'
+  "./",
+  "./index.html",
+  "./style.css",
+  "./app.js",
+  "./gdrive.js",
+  "./manifest.json"
 ];
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
+self.addEventListener("install", (e) => {
+  e.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+  );
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(
-    keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
-  )));
+self.addEventListener("activate", (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : null)))
+    )
+  );
   self.clients.claim();
 });
 
-self.addEventListener('fetch', (event) => {
-  const req = event.request;
-  event.respondWith(
-    caches.match(req).then((cached) => cached || fetch(req).then((res)=>{
-      const copy = res.clone();
-      caches.open(CACHE_NAME).then(cache => cache.put(req, copy));
-      return res;
-    }).catch(()=>caches.match('./index.html')))
+self.addEventListener("fetch", (e) => {
+  e.respondWith(
+    caches.match(e.request).then((res) => res || fetch(e.request))
   );
 });
