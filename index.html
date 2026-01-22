@@ -51,7 +51,7 @@
     <div id="orders-list"></div>
   </div>
 
-  <!-- FLOATING + -->
+  <!-- FAB -->
   <button class="fab" onclick="openNewOrder()">+</button>
 
   <!-- NEW ORDER MODAL -->
@@ -69,7 +69,7 @@
     </div>
   </div>
 
-  <!-- ✅ PYTHON STYLE ORDER DETAILS MODAL -->
+  <!-- ORDER DETAILS MODAL -->
   <div id="modal-detail" class="modal">
     <div class="modal-box big">
 
@@ -78,7 +78,6 @@
         <button class="btn btn-red btn-sm" onclick="deleteOrder()">Delete</button>
       </div>
 
-      <!-- ✅ Select Order dropdown like python -->
       <div class="row-inputs" style="margin-bottom:10px;">
         <select id="orderSelect" onchange="onOrderSelectChange()"></select>
         <button class="btn btn-blue btn-sm" onclick="openNewOrder()">+ New</button>
@@ -98,7 +97,7 @@
 
       <div id="d-pending" class="pending"></div>
 
-      <!-- ✅ Tabs like python -->
+      <!-- Tabs -->
       <div style="display:flex;gap:8px;margin:12px 0;">
         <button class="btn btn-sm" onclick="switchTab('income')">💰 Income</button>
         <button class="btn btn-sm" onclick="switchTab('expense')">🧾 Expense</button>
@@ -108,10 +107,14 @@
       <!-- TAB: INCOME -->
       <div id="tab-income">
         <h4 style="margin:10px 0 6px;">Income</h4>
+
+        <!-- ✅ Date + Amount -->
         <div class="row-inputs">
+          <input id="pay-in-date" type="date" />
           <input id="pay-in-amt" type="number" placeholder="Amount" />
           <button class="btn btn-blue btn-sm" onclick="addIncome()">Add</button>
         </div>
+
         <div id="list-income"></div>
       </div>
 
@@ -120,7 +123,6 @@
         <h4 style="margin:10px 0 6px;">Expenses / Tasks</h4>
 
         <div class="row-inputs">
-          <!-- ✅ dynamic categories -->
           <select id="task-type"></select>
           <select id="task-artist"></select>
           <input id="task-cost" type="number" placeholder="Cost" />
