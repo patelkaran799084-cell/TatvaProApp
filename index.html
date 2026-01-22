@@ -18,13 +18,21 @@
     </div>
 
     <div class="actions">
+      <!-- ✅ Business switch (Only businesses matching login email will show) -->
+      <select id="bizSelect" class="btn-top" onchange="switchBusinessFromUI()"></select>
+
+      <!-- ✅ Admin Business Manager -->
+      <button class="btn-top" onclick="openBusinessMgr()">🏢 Business</button>
+
       <button class="btn-top" onclick="openTeamMgr()">👥 Team</button>
       <button class="btn-top" onclick="openCategoryMgr()">🗂 Category</button>
 
+      <!-- DRIVE -->
       <button class="btn-top" onclick="driveLogin()">🔐 Drive Login</button>
       <button class="btn-top" onclick="backupToDrive(collectAppBackupData())">☁ Backup</button>
       <button class="btn-top" onclick="restoreFromDrive()">☁ Restore</button>
 
+      <!-- LOCAL -->
       <button class="btn-top" onclick="backupData()">⬇ Save</button>
       <label class="btn-top" style="cursor:pointer;">
         ⬆ Load
@@ -107,44 +115,36 @@
       <!-- TAB: INCOME -->
       <div id="tab-income">
         <h4 style="margin:10px 0 6px;">Income</h4>
-
-        <!-- ✅ Date + Amount -->
         <div class="row-inputs">
           <input id="pay-in-date" type="date" />
           <input id="pay-in-amt" type="number" placeholder="Amount" />
           <button class="btn btn-blue btn-sm" onclick="addIncome()">Add</button>
         </div>
-
         <div id="list-income"></div>
       </div>
 
       <!-- TAB: EXPENSE -->
       <div id="tab-expense" style="display:none;">
         <h4 style="margin:10px 0 6px;">Expenses / Tasks</h4>
-
         <div class="row-inputs">
           <select id="task-type"></select>
           <select id="task-artist"></select>
           <input id="task-cost" type="number" placeholder="Cost" />
           <button class="btn btn-blue btn-sm" onclick="addTask()">Add</button>
         </div>
-
         <div style="font-size:12px;color:#666;margin-top:6px;">
           Category add/remove → Top bar "🗂 Category"
         </div>
-
         <div id="list-tasks"></div>
       </div>
 
       <!-- TAB: SUMMARY -->
       <div id="tab-summary" style="display:none;">
-        <h4 style="margin:10px 0 6px;">Payment History (Dropdown)</h4>
-
+        <h4 style="margin:10px 0 6px;">Payment History</h4>
         <details style="background:#fff;border:1px solid #eee;border-radius:12px;padding:10px;margin-top:8px;">
           <summary style="cursor:pointer;font-weight:800;">Client Income History</summary>
           <div id="hist-income" style="margin-top:10px;"></div>
         </details>
-
         <details style="background:#fff;border:1px solid #eee;border-radius:12px;padding:10px;margin-top:10px;">
           <summary style="cursor:pointer;font-weight:800;">Task Payments History</summary>
           <div id="hist-expense" style="margin-top:10px;"></div>
@@ -179,11 +179,44 @@
       <h3>Task Categories</h3>
       <div id="list-cat"></div>
       <div class="row-inputs">
-        <input id="cat-new" placeholder="New Category (e.g. Model/Print/Color)" />
+        <input id="cat-new" placeholder="New Category" />
         <button class="btn btn-blue btn-sm" onclick="addCategory()">Add</button>
       </div>
       <div class="row">
         <button class="btn" onclick="document.getElementById('overlay-cat').style.display='none'">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ✅ BUSINESS MANAGER (ADMIN PIN) -->
+  <div id="overlay-biz" class="overlay" style="display:none;">
+    <div class="modal-box">
+      <h3>Business Manager</h3>
+
+      <div id="biz-info" style="font-size:12px;color:#666;margin-bottom:8px;"></div>
+
+      <div class="row-inputs">
+        <input id="biz-pin" type="password" inputmode="numeric" placeholder="Admin PIN" />
+        <button class="btn btn-blue btn-sm" onclick="unlockBizAdmin()">Unlock</button>
+      </div>
+
+      <div id="biz-panel" style="display:none;margin-top:12px;">
+        <h4 style="margin:0 0 8px;">All Businesses</h4>
+        <div id="biz-list"></div>
+
+        <h4 style="margin:14px 0 6px;">Add New Business</h4>
+        <div class="row-inputs">
+          <input id="biz-new-name" placeholder="Business Name" />
+          <input id="biz-new-owner" placeholder="Owner Email (bhai gmail)" />
+          <button class="btn btn-blue btn-sm" onclick="addBusiness()">Add</button>
+        </div>
+        <div style="font-size:12px;color:#666;margin-top:6px;">
+          Owner Email match login email ⇒ only that business visible.
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="btn" onclick="document.getElementById('overlay-biz').style.display='none'">Close</button>
       </div>
     </div>
   </div>
