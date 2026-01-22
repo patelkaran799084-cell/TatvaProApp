@@ -4,12 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tatva OS Pro</title>
+
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#263646" />
   <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
+
   <!-- TOP BAR -->
   <div class="topbar">
     <div class="brand">
@@ -17,12 +19,12 @@
       <span class="title">Tatva OS Pro</span>
     </div>
 
-    <div class="actions">
+    <div class="actions" id="topActions">
       <!-- ✅ Business switch (Only businesses matching login email will show) -->
       <select id="bizSelect" class="btn-top" onchange="switchBusinessFromUI()"></select>
 
-      <!-- ✅ Admin Business Manager -->
-      <button class="btn-top" onclick="openBusinessMgr()">🏢 Business</button>
+      <!-- ✅ ADMIN only -->
+      <button id="btnBiz" class="btn-top" style="display:none;" onclick="openBusinessMgr()">🏢 Business</button>
 
       <button class="btn-top" onclick="openTeamMgr()">👥 Team</button>
       <button class="btn-top" onclick="openCategoryMgr()">🗂 Category</button>
@@ -46,8 +48,25 @@
     Drive: Not connected
   </div>
 
+  <!-- ✅ LOGIN LOCK SCREEN -->
+  <div id="loginLock" style="display:none;min-height:75vh;align-items:center;justify-content:center;flex-direction:column;">
+    <div style="background:#fff;padding:16px 18px;border-radius:16px;max-width:420px;width:92%;box-shadow:0 8px 24px rgba(0,0,0,.12);text-align:center;">
+      <h2 style="margin:8px 0;color:#263646;">🔐 Login Required</h2>
+      <p style="margin:0 0 12px;color:#666;line-height:1.5;">
+        App use karva mate pehla <b>Drive Login</b> required che.
+        Login pachhi tamaru business auto open thase.
+      </p>
+      <button class="btn btn-blue" style="width:100%;padding:10px 12px;font-size:16px;" onclick="driveLogin()">
+        🔐 Drive Login
+      </button>
+      <div style="margin-top:10px;font-size:12px;color:#888;">
+        Admin: patelkaran799084@gmail.com
+      </div>
+    </div>
+  </div>
+
   <!-- DASHBOARD -->
-  <div class="container">
+  <div class="container" id="mainApp">
     <div class="stats">
       <div class="stat-card"><div id="st-orders">0</div><small>Orders</small></div>
       <div class="stat-card"><div id="st-profit">₹0</div><small>Net Profit</small></div>
@@ -60,7 +79,7 @@
   </div>
 
   <!-- FAB -->
-  <button class="fab" onclick="openNewOrder()">+</button>
+  <button class="fab" id="fabBtn" onclick="openNewOrder()">+</button>
 
   <!-- NEW ORDER MODAL -->
   <div id="modal-new" class="modal">
@@ -191,7 +210,7 @@
   <!-- ✅ BUSINESS MANAGER (ADMIN PIN) -->
   <div id="overlay-biz" class="overlay" style="display:none;">
     <div class="modal-box">
-      <h3>Business Manager</h3>
+      <h3>Business Manager (Admin)</h3>
 
       <div id="biz-info" style="font-size:12px;color:#666;margin-bottom:8px;"></div>
 
