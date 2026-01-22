@@ -20,12 +20,15 @@
     <div class="actions">
       <button class="btn-top" onclick="openTeamMgr()">👥 Team</button>
 
-      <!-- ✅ GOOGLE DRIVE BUTTONS -->
+      <!-- ✅ NEW: CATEGORY MANAGER -->
+      <button class="btn-top" onclick="openCategoryMgr()">🗂 Category</button>
+
+      <!-- DRIVE -->
       <button class="btn-top" onclick="driveLogin()">🔐 Drive Login</button>
       <button class="btn-top" onclick="backupToDrive(collectAppBackupData())">☁ Backup</button>
       <button class="btn-top" onclick="restoreFromDrive()">☁ Restore</button>
 
-      <!-- ✅ LOCAL SAVE/LOAD -->
+      <!-- LOCAL SAVE/LOAD -->
       <button class="btn-top" onclick="backupData()">⬇ Save</button>
       <label class="btn-top" style="cursor:pointer;">
         ⬆ Load
@@ -35,7 +38,7 @@
     </div>
   </div>
 
-  <!-- ✅ DRIVE STATUS -->
+  <!-- DRIVE STATUS -->
   <div id="driveStatus" style="font-size:12px;color:#ddd;margin:6px 14px;">
     Drive: Not connected
   </div>
@@ -100,16 +103,18 @@
 
       <h4>Expenses / Tasks</h4>
       <div class="row-inputs">
-        <select id="task-type">
-          <option value="Photo">Photo</option>
-          <option value="Video">Video</option>
-          <option value="Design">Design</option>
-          <option value="Other">Other</option>
-        </select>
+        <!-- ✅ NOW dynamic categories -->
+        <select id="task-type"></select>
+
         <select id="task-artist"></select>
         <input id="task-cost" type="number" placeholder="Cost" />
         <button class="btn btn-blue btn-sm" onclick="addTask()">Add</button>
       </div>
+
+      <div style="font-size:12px;color:#666;margin-top:6px;">
+        Tip: Category add/remove → top bar "🗂 Category"
+      </div>
+
       <div id="list-tasks"></div>
 
       <div class="row">
@@ -134,7 +139,22 @@
     </div>
   </div>
 
-  <!-- ✅ IMPORTANT: scripts order -->
+  <!-- ✅ CATEGORY MODAL -->
+  <div id="overlay-cat" class="overlay" style="display:none;">
+    <div class="modal-box">
+      <h3>Task Categories</h3>
+      <div id="list-cat"></div>
+      <div class="row-inputs">
+        <input id="cat-new" placeholder="New Category (e.g. Model/Print/Color)" />
+        <button class="btn btn-blue btn-sm" onclick="addCategory()">Add</button>
+      </div>
+      <div class="row">
+        <button class="btn" onclick="document.getElementById('overlay-cat').style.display='none'">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- scripts order -->
   <script src="app.js"></script>
   <script src="gdrive.js"></script>
 </body>
