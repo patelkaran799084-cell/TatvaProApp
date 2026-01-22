@@ -1,5 +1,4 @@
-// service-worker.js
-const CACHE_NAME = "tatva-pro-v10"; // ✅ every update change this number
+const CACHE_NAME = "tatva-pro-v20"; // ✅ every update change this number
 
 const ASSETS = [
   "./",
