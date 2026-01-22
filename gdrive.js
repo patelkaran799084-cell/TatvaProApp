@@ -1,8 +1,8 @@
 /*************************************************
- * Tatva Pro - gdrive.js (FINAL)
- * ✅ Drive login -> reads user email
- * ✅ Backup/Restore business wise file name
- * ✅ Auto Sync + Auto Backup
+ * Tatva OS Pro - gdrive.js (FINAL)
+ * ✅ Drive login (email)
+ * ✅ Auto sync between phone + pc
+ * ✅ Auto backup on changes
  *************************************************/
 
 const CLIENT_ID =
@@ -18,12 +18,12 @@ window.__driveConnected = false;
 window.__driveUserEmail = "";
 window.__driveAccessToken = "";
 
-// device detect
+// detect device
 const __isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-// timings
-const AUTO_BACKUP_DELAY_MS = __isMobile ? 9000 : 4000;
-const AUTO_SYNC_INTERVAL_MS = __isMobile ? 12000 : 8000;
+// faster sync
+const AUTO_BACKUP_DELAY_MS = __isMobile ? 6000 : 2500;
+const AUTO_SYNC_INTERVAL_MS = __isMobile ? 8000 : 5000;
 
 function getBackupFileName() {
   return (window.getActiveDriveBackupFileName && window.getActiveDriveBackupFileName()) || "TatvaPro_Backup.json";
@@ -187,15 +187,14 @@ window.driveLogin = async function () {
 
         window.updateDriveStatusUI && window.updateDriveStatusUI();
 
-        // ✅ refresh businesses after login
+        // ✅ inform app
         try {
-          if (window.loadDBForActiveBusiness) window.loadDBForActiveBusiness();
-          if (window.renderBizDropdown) window.renderBizDropdown();
-          if (window.renderHome) window.renderHome();
+          if (window.onDriveLoginSuccess) window.onDriveLoginSuccess();
         } catch (e) {}
 
         alert("✅ Drive Login successful");
-        setTimeout(() => window.autoSyncFromDrive && window.autoSyncFromDrive(), 1500);
+
+        setTimeout(() => window.autoSyncFromDrive && window.autoSyncFromDrive(), 1200);
       }
     });
 
@@ -301,8 +300,8 @@ window.autoSyncFromDrive = async function () {
   }
 };
 
-// init
-setTimeout(() => window.autoSyncFromDrive && window.autoSyncFromDrive(), 2500);
+// init auto sync
+setTimeout(() => window.autoSyncFromDrive && window.autoSyncFromDrive(), 2000);
 setInterval(() => window.autoSyncFromDrive && window.autoSyncFromDrive(), AUTO_SYNC_INTERVAL_MS);
 
 console.log("✅ gdrive.js loaded (FINAL)");
