@@ -1,6 +1,6 @@
 // ============================
-// Tatva Pro - app.js ✅ PYTHON STYLE ORDER DETAILS
-// + Dynamic Categories system (Team jvu)
+// Tatva Pro - app.js
+// ✅ Mobile Friendly + Category System + Manual Payment Dates
 // ============================
 
 window.db = JSON.parse(localStorage.getItem('tatva_pro_db')) || {
@@ -84,9 +84,8 @@ function openNewOrder(){
   document.getElementById('new-work').value='';
   document.getElementById('new-price').value='';
   document.getElementById('new-date').valueAsDate=new Date();
-  document.getElementById('modal-new').style.display='block';
+  document.getElementById('modal-new').style.display='flex';
 }
-
 function createOrder(){
   let client=document.getElementById('new-client').value.trim();
   let price=Number(document.getElementById('new-price').value);
@@ -101,11 +100,12 @@ function createOrder(){
     income: [],
     tasks: []
   });
+
   saveDB();
   closeModal('modal-new');
 }
 
-// ---------- DETAIL (python style) ----------
+// ---------- DETAILS ----------
 function openDetail(id){
   currentId = id;
 
@@ -117,7 +117,7 @@ function openDetail(id){
 
   renderDetail();
   switchTab('income');
-  document.getElementById('modal-detail').style.display='block';
+  document.getElementById('modal-detail').style.display='flex';
 }
 
 function fillOrderDropdown(){
@@ -202,7 +202,6 @@ function renderDetail(){
     totalPaidOut += paid;
     let due=t.cost-paid;
 
-    // dropdown history like python (inside each task)
     let payHist = '';
     (t.payouts||[]).forEach((p,pIdx)=>{
       payHist += `<div class="list-item" style="color:#666;font-size:11px;padding-left:10px;">
@@ -219,6 +218,8 @@ function renderDetail(){
       <div style="margin-top:8px;">
         ${payHist}
         <div class="row-inputs" style="margin-top:8px;">
+          <!-- ✅ Manual date -->
+          <input type="date" id="t-date-${tIdx}" style="margin:0;padding:6px;font-size:13px;">
           <input type="number" id="t-pay-${tIdx}" placeholder="Amt" style="margin:0;padding:6px;font-size:13px;">
           <button class="btn btn-blue btn-sm" onclick="payTask(${tIdx})">Pay</button>
         </div>
@@ -239,11 +240,19 @@ function renderDetail(){
 
 // ---------- INCOME ----------
 function addIncome(){
-  let amt=Number(document.getElementById('pay-in-amt').value);
+  let amt = Number(document.getElementById('pay-in-amt').value);
   if(!amt) return;
+
+  let dateEl = document.getElementById('pay-in-date');
+  let dt = (dateEl && dateEl.value)
+    ? dateEl.value.split('-').reverse().join('/')
+    : new Date().toLocaleDateString('en-GB');
+
   let o=db.orders.find(x=>x.id===currentId);
-  (o.income ||= []).push({amt,date:new Date().toLocaleDateString('en-GB')});
+  (o.income ||= []).push({amt, date: dt});
+
   document.getElementById('pay-in-amt').value='';
+  if(dateEl) dateEl.value='';
   saveDB();
 }
 function delInc(idx){
@@ -266,13 +275,26 @@ function addTask(){
   document.getElementById('task-cost').value='';
   saveDB();
 }
+
 function payTask(tIdx){
   let amt=Number(document.getElementById(`t-pay-${tIdx}`).value);
   if(!amt) return;
+
+  let dateEl = document.getElementById(`t-date-${tIdx}`);
+  let dt = (dateEl && dateEl.value)
+    ? dateEl.value.split('-').reverse().join('/')
+    : new Date().toLocaleDateString('en-GB');
+
   let o=db.orders.find(x=>x.id===currentId);
-  o.tasks[tIdx].payouts.push({amt,date:new Date().toLocaleDateString('en-GB')});
+  o.tasks[tIdx].payouts.push({amt, date: dt});
+
+  // clear inputs after add
+  document.getElementById(`t-pay-${tIdx}`).value = '';
+  if(dateEl) dateEl.value = '';
+
   saveDB();
 }
+
 function delTask(tIdx){
   if(!confirm("Delete Task?")) return;
   let o=db.orders.find(x=>x.id===currentId);
@@ -401,18 +423,23 @@ renderHome();
 
 // ---------- DRIVE SYNC SUPPORT ----------
 window.collectAppBackupData=function(){
-  return { app:"TatvaPro", version:3, ts:Date.now(), db:db };
+  return { app:"TatvaPro", version:4, ts:Date.now(), db:db };
 };
+
 window.applyBackupObject=function(backup){
   if(backup && backup.db){
     window.__isRestoring=true;
+
     db=backup.db;
     db.team ||= ['Self'];
     db.categories ||= ['Model','Print','Color','Material','Other'];
+
     localStorage.setItem('tatva_pro_db', JSON.stringify(db));
     localStorage.setItem("LOCAL_LAST_TS", String(backup.ts || Date.now()));
+
     renderHome();
     if(currentId) renderDetail();
+
     setTimeout(()=>{ window.__isRestoring=false; },1200);
   }
 };
