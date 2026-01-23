@@ -29,15 +29,17 @@
       <button class="btn-top" onclick="openTeamMgr()">👥 Team</button>
       <button class="btn-top" onclick="openCategoryMgr()">🗂 Category</button>
 
-      <!-- ✅ DRIVE (Only change) -->
+      <!-- ✅ DRIVE -->
       <button id="btnDriveLogin" class="btn-top" onclick="driveLogin()">🔐 Drive Login</button>
       <button id="btnDriveLogout" class="btn-top" style="display:none;" onclick="driveLogout()">🚪 Drive Logout</button>
 
-      <button class="btn-top" onclick="backupToDrive(collectAppBackupData())">☁ Backup</button>
+      <!-- ✅ Drive Backup/Restore -->
+      <button class="btn-top" onclick="backupToDrive()">☁ Backup</button>
       <button class="btn-top" onclick="restoreFromDrive()">☁ Restore</button>
 
       <!-- LOCAL -->
       <button class="btn-top" onclick="backupData()">⬇ Save</button>
+
       <label class="btn-top" style="cursor:pointer;">
         ⬆ Load
         <input type="file" accept=".json" style="display:none" onchange="restoreData(this)" />
@@ -47,7 +49,7 @@
 
   <!-- DRIVE STATUS -->
   <div id="driveStatus" style="font-size:12px;color:#ddd;margin:6px 14px;">
-    Drive: Not connected
+    Drive: ❌ Not connected
   </div>
 
   <!-- ✅ LOGIN LOCK SCREEN -->
@@ -101,6 +103,7 @@
   <!-- ORDER DETAILS MODAL -->
   <div id="modal-detail" class="modal">
     <div class="modal-box big">
+
       <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <h3 style="margin:0;">Order Details</h3>
         <button class="btn btn-red btn-sm" onclick="deleteOrder()">Delete</button>
@@ -125,12 +128,14 @@
 
       <div id="d-pending" class="pending"></div>
 
+      <!-- Tabs -->
       <div style="display:flex;gap:8px;margin:12px 0;">
         <button class="btn btn-sm" onclick="switchTab('income')">💰 Income</button>
         <button class="btn btn-sm" onclick="switchTab('expense')">🧾 Expense</button>
         <button class="btn btn-sm" onclick="switchTab('summary')">📌 Summary</button>
       </div>
 
+      <!-- TAB: INCOME -->
       <div id="tab-income">
         <h4 style="margin:10px 0 6px;">Income</h4>
         <div class="row-inputs">
@@ -141,6 +146,7 @@
         <div id="list-income"></div>
       </div>
 
+      <!-- TAB: EXPENSE -->
       <div id="tab-expense" style="display:none;">
         <h4 style="margin:10px 0 6px;">Expenses / Tasks</h4>
         <div class="row-inputs">
@@ -155,6 +161,7 @@
         <div id="list-tasks"></div>
       </div>
 
+      <!-- TAB: SUMMARY -->
       <div id="tab-summary" style="display:none;">
         <h4 style="margin:10px 0 6px;">Payment History</h4>
         <details style="background:#fff;border:1px solid #eee;border-radius:12px;padding:10px;margin-top:8px;">
@@ -237,10 +244,11 @@
     </div>
   </div>
 
+  <!-- SCRIPTS -->
   <script src="app.js"></script>
   <script src="gdrive.js"></script>
 
-  <!-- ✅ only small addition -->
+  <!-- extra small init -->
   <script>
     window.addEventListener("load", () => {
       if (window.updateDriveStatusUI) window.updateDriveStatusUI();
