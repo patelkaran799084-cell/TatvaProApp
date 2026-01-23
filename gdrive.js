@@ -10,6 +10,10 @@ const CLIENT_ID="945495636870-9uljt6291qui5sjskpnojqqtu1hs9o2g.apps.googleuserco
 const API_KEY="AIzaSyBmk0MvlOyzLMBJHtOpuLRz1izmcZQr7x0";
 let ready=false;
 
+const AUTO_SYNC_INTERVAL_MS = 10000; // 10 sec fast sync
+let __autoSyncTimer=null;
+let __backupDebounceTimer=null;
+
 function qs(id){ return document.getElementById(id); }
 
 function setUI(){
@@ -89,7 +93,7 @@ async function upload(jsonStr){
 async function download(){
   await init();
   const id=await listFile();
-  if(!id){ alert("❌ Drive backup file not found. Pehla Backup karo."); return null; }
+  if(!id){ if(!opts.silent) alert("❌ Drive backup file not found. Pehla Backup karo."); return null; }
   const url=`https://www.googleapis.com/drive/v3/files/${id}?alt=media`;
   const res=await fetch(url,{ headers:{Authorization:"Bearer "+window.__driveAccessToken}});
   if(!res.ok) throw new Error("Download failed: "+res.status);
@@ -106,7 +110,8 @@ async function download(){
       window.__driveAccessToken=token;
       window.__driveConnected=true;
       window.__driveUserEmail=email;
-      setTimeout(()=>{ setUI(); if(window.onDriveLoginSuccess) window.onDriveLoginSuccess(); },150);
+      setTimeout(()=>{ setUI(); if(window.onDriveLoginSuccess) window.onDriveLoginSuccess();
+        startAutoSync(); },150);
       return;
     }
   }catch(e){}
@@ -121,7 +126,7 @@ window.driveLogin = async function(){
       client_id: CLIENT_ID,
       scope:"https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email",
       callback: async (resp)=>{
-        if(!resp || !resp.access_token){ alert("❌ Drive login failed"); return; }
+        if(!resp || !resp.access_token){ if(!opts.silent) alert("❌ Drive login failed"); return; }
         window.__driveAccessToken=resp.access_token;
         window.__driveConnected=true;
         localStorage.setItem("DRIVE_ACCESS_TOKEN",resp.access_token);
@@ -133,10 +138,11 @@ window.driveLogin = async function(){
         }catch(e){}
         setUI();
         if(window.onDriveLoginSuccess) window.onDriveLoginSuccess();
+        startAutoSync();
       }
     });
     tc.requestAccessToken({prompt:""});
-  }catch(e){ console.error(e); alert("❌ Drive init/login failed"); }
+  }catch(e){ console.error(e); if(!opts.silent) alert("❌ Drive init/login failed"); }
 };
 
 window.driveLogout = async function(){
@@ -152,19 +158,19 @@ window.driveLogout = async function(){
   location.reload();
 };
 
-window.backupToDrive = async function(){
+window.backupToDrive = async function(opts={}){
   try{
-    if(!window.__driveConnected || !window.__driveAccessToken) return alert("❌ Please Drive Login first");
+    if(!window.__driveConnected || !window.__driveAccessToken) return if(!opts.silent) alert("❌ Please Drive Login first");
     if(!window.collectAppBackupData) return alert("❌ collectAppBackupData() missing in app.js");
     const data=window.collectAppBackupData();
     await upload(JSON.stringify(data,null,2));
-    alert("✅ Backup uploaded to Drive");
+    if(!opts.silent) alert("✅ Backup uploaded to Drive");
   }catch(e){ console.error(e); alert("❌ Backup failed (Open console for details)"); }
 };
 
-window.restoreFromDrive = async function(){
+window.restoreFromDrive = async function(opts={}){
   try{
-    if(!window.__driveConnected || !window.__driveAccessToken) return alert("❌ Please Drive Login first");
+    if(!window.__driveConnected || !window.__driveAccessToken) return if(!opts.silent) alert("❌ Please Drive Login first");
     const txt=await download();
     if(!txt) return;
     const obj=JSON.parse(txt);
@@ -173,3 +179,44 @@ window.restoreFromDrive = async function(){
   }catch(e){ console.error(e); alert("❌ Restore failed (Open console for details) "); }
 };
 })();
+
+// ---- Auto Sync (Fast) ----
+
+function startAutoSync(){
+  if(__autoSyncTimer) return;
+  __autoSyncTimer = setInterval(async ()=>{
+    try{
+      if(!window.__driveConnected) return;
+      // check Drive file modifiedTime
+      const name = window.getActiveDriveBackupFileName ? window.getActiveDriveBackupFileName() : "TatvaPro_Backup.json";
+      const q = encodeURIComponent(`name='${name}' and trashed=false`);
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&spaces=appDataFolder`,{
+        headers:{Authorization:`Bearer ${window.__driveAccessToken}`}
+      });
+      const js = await res.json();
+      const f = js.files && js.files[0];
+      if(!f) return;
+      const driveTs = Date.parse(f.modifiedTime)||0;
+      const lastPull = parseInt(localStorage.getItem("DRIVE_LAST_PULL_TS")||"0",10);
+      const localTs = parseInt(localStorage.getItem("LOCAL_LAST_TS")||"0",10);
+      // If Drive newer than what we've pulled AND newer than local changes -> pull
+      if(driveTs>lastPull && driveTs>localTs){
+        await window.restoreFromDrive({silent:true});
+        localStorage.setItem("DRIVE_LAST_PULL_TS", String(driveTs));
+      }
+    }catch(e){ /* silent */ }
+  }, AUTO_SYNC_INTERVAL_MS);
+}
+
+window.scheduleAutoBackup = function(){
+  try{
+    if(!window.__driveConnected) return;
+    clearTimeout(__backupDebounceTimer);
+    __backupDebounceTimer = setTimeout(async ()=>{
+      try{
+        await window.backupToDrive({silent:true});
+      }catch(e){}
+    }, 4000);
+  }catch(e){}
+};
+
