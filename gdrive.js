@@ -1,307 +1,222 @@
-/*************************************************
- * Tatva OS Pro - gdrive.js (FINAL)
- * ✅ Drive login (email)
- * ✅ Auto sync between phone + pc
- * ✅ Auto backup on changes
- *************************************************/
+(function(){
+/* Tatva OS Pro - gdrive.js FINAL (Stable Upload/Download)
+   - Uses app.js hooks:
+     getActiveDriveBackupFileName()
+     collectAppBackupData()
+     applyAppRestoreData()
+     onDriveLoginSuccess()
+*/
+const CLIENT_ID="945495636870-9uljt6291qui5sjskpnojqqtu1hs9o2g.apps.googleusercontent.com";
+const API_KEY="AIzaSyBmk0MvlOyzLMBJHtOpuLRz1izmcZQr7x0";
+let ready=false;
 
-const CLIENT_ID =
-  "945495636870-9uljt6291qui5sjskpnojqqtu1hs9o2g.apps.googleusercontent.com";
+const AUTO_SYNC_INTERVAL_MS = 10000; // 10 sec fast sync
+let __autoSyncTimer=null;
+let __backupDebounceTimer=null;
 
-const API_KEY =
-  "AIzaSyBmk0MvlOyzLMBJHtOpuLRz1izmcZQr7x0";
+function qs(id){ return document.getElementById(id); }
 
-let __backupLock = false;
-let __syncLock = false;
+function setUI(){
+  const ok=!!(window.__driveConnected && window.__driveAccessToken);
+  const el=qs("driveStatus");
+  if(el) el.textContent= ok ? `Drive: ✅ Connected (${window.__driveUserEmail||""})` : "Drive: ❌ Not connected";
+  const a=qs("btnDriveLogin"), b=qs("btnDriveLogout");
+  if(a) a.style.display= ok?"none":"inline-flex";
+  if(b) b.style.display= ok?"inline-flex":"none";
+}
+window.updateDriveStatusUI=setUI;
 
-window.__driveConnected = false;
-window.__driveUserEmail = "";
-window.__driveAccessToken = "";
-
-// detect device
-const __isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-// faster sync
-const AUTO_BACKUP_DELAY_MS = __isMobile ? 6000 : 2500;
-const AUTO_SYNC_INTERVAL_MS = __isMobile ? 8000 : 5000;
-
-function getBackupFileName() {
-  return (window.getActiveDriveBackupFileName && window.getActiveDriveBackupFileName()) || "TatvaPro_Backup.json";
+async function loadScript(src){
+  return new Promise((res,rej)=>{ const s=document.createElement("script"); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s);});
 }
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = src;
-    s.async = true;
-    s.onload = resolve;
-    s.onerror = reject;
-    document.head.appendChild(s);
+async function init(){
+  if(ready) return;
+  if(!window.gapi) await loadScript("https://apis.google.com/js/api.js");
+  await new Promise(r=>gapi.load("client", r));
+  await gapi.client.init({ apiKey: API_KEY, discoveryDocs:["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"]});
+  ready=true;
+}
+
+function fileName(){
+  try{ if(window.getActiveDriveBackupFileName) return window.getActiveDriveBackupFileName(); }catch(e){}
+  return "TatvaPro_Backup.json";
+}
+
+async function listFile(){
+  await init();
+  gapi.client.setToken({access_token: window.__driveAccessToken});
+  const name=fileName();
+  const q=`name='${name.replace(/'/g,"\\'")}' and trashed=false`;
+  const r=await gapi.client.drive.files.list({q, fields:"files(id,name)", spaces:"drive"});
+  const files=r?.result?.files||[];
+  return files.length?files[0].id:null;
+}
+
+async function upload(jsonStr){
+  await init();
+  const name=fileName();
+  const fileId=await listFile();
+
+  // multipart upload via fetch (more reliable than gapi for multipart)
+  const boundary="-------314159265358979323846";
+  const delimiter="\r\n--"+boundary+"\r\n";
+  const close="\r\n--"+boundary+"--";
+
+  const metadata={name, mimeType:"application/json"};
+  const body=
+    delimiter+"Content-Type: application/json; charset=UTF-8\r\n\r\n"+JSON.stringify(metadata)+
+    delimiter+"Content-Type: application/json\r\n\r\n"+jsonStr+
+    close;
+
+  const method=fileId?"PATCH":"POST";
+  const url=fileId
+    ?`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`
+    :"https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
+
+  const res=await fetch(url,{
+    method,
+    headers:{
+      "Authorization":"Bearer "+window.__driveAccessToken,
+      "Content-Type":"multipart/related; boundary="+boundary
+    },
+    body
   });
-}
 
-async function ensureGapi() {
-  if (!window.gapi) await loadScript("https://apis.google.com/js/api.js");
-  return new Promise(res => gapi.load("client", res));
-}
-
-async function ensureGIS() {
-  if (!window.google || !window.google.accounts)
-    await loadScript("https://accounts.google.com/gsi/client");
-}
-
-async function initDriveClient() {
-  await ensureGapi();
-  await gapi.client.init({
-    apiKey: API_KEY,
-    discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"]
-  });
-}
-
-function setDriveStatus(txt) {
-  const el = document.getElementById("driveStatus");
-  if (el) el.innerText = txt;
-}
-
-window.updateDriveStatusUI = function () {
-  if (window.__driveConnected) {
-    const em = window.__driveUserEmail ? ` (${window.__driveUserEmail})` : "";
-    setDriveStatus("Drive: Connected" + em);
-  } else {
-    setDriveStatus("Drive: Not connected");
+  if(!res.ok){
+    const t=await res.text().catch(()=> "");
+    console.log("DRIVE_UPLOAD_ERROR",res.status,t);
+    throw new Error("Upload failed: "+res.status);
   }
-};
+}
 
-// restore session
-(function () {
-  try {
-    const token = localStorage.getItem("DRIVE_ACCESS_TOKEN") || "";
-    const email = localStorage.getItem("DRIVE_USER_EMAIL") || "";
-    const ok = localStorage.getItem("DRIVE_CONNECTED") === "1";
-    if (ok && token) {
-      window.__driveAccessToken = token;
-      window.__driveUserEmail = email;
-      window.__driveConnected = true;
+async function download(){
+  await init();
+  const id=await listFile();
+  if(!id){ if(!opts.silent) alert("❌ Drive backup file not found. Pehla Backup karo."); return null; }
+  const url=`https://www.googleapis.com/drive/v3/files/${id}?alt=media`;
+  const res=await fetch(url,{ headers:{Authorization:"Bearer "+window.__driveAccessToken}});
+  if(!res.ok) throw new Error("Download failed: "+res.status);
+  return await res.text();
+}
+
+// Persistent session
+(function(){
+  try{
+    const token=localStorage.getItem("DRIVE_ACCESS_TOKEN")||"";
+    const email=localStorage.getItem("DRIVE_USER_EMAIL")||"";
+    const ok=localStorage.getItem("DRIVE_CONNECTED")==="1";
+    if(ok && token){
+      window.__driveAccessToken=token;
+      window.__driveConnected=true;
+      window.__driveUserEmail=email;
+      setTimeout(()=>{ setUI(); if(window.onDriveLoginSuccess) window.onDriveLoginSuccess();
+        startAutoSync(); },150);
+      return;
     }
-  } catch (e) {}
-  setTimeout(() => window.updateDriveStatusUI && window.updateDriveStatusUI(), 500);
+  }catch(e){}
+  setTimeout(setUI,150);
 })();
 
-async function ensureDriveReady() {
-  await initDriveClient();
-  if (window.__driveAccessToken) {
-    gapi.client.setToken({ access_token: window.__driveAccessToken });
-  }
-}
-
-// find file
-async function findBackupFileId() {
-  const name = getBackupFileName();
-  const q = `name='${name}' and trashed=false`;
-  const res = await gapi.client.drive.files.list({
-    q, fields: "files(id,name)", spaces: "drive"
-  });
-  const files = res.result.files || [];
-  return files.length ? files[0].id : null;
-}
-
-async function createBackupFile(contentStr) {
-  const boundary = "-------314159265358979323846";
-  const delimiter = "\r\n--" + boundary + "\r\n";
-  const closeDelim = "\r\n--" + boundary + "--";
-
-  const metadata = { name: getBackupFileName(), mimeType: "application/json" };
-
-  const body =
-    delimiter + "Content-Type: application/json\r\n\r\n" + JSON.stringify(metadata) +
-    delimiter + "Content-Type: application/json\r\n\r\n" + contentStr +
-    closeDelim;
-
-  const request = gapi.client.request({
-    path: "/upload/drive/v3/files",
-    method: "POST",
-    params: { uploadType: "multipart" },
-    headers: { "Content-Type": `multipart/related; boundary="${boundary}"` },
-    body
-  });
-  const res = await request;
-  return res.result.id;
-}
-
-async function updateBackupFile(fileId, contentStr) {
-  const boundary = "-------314159265358979323846";
-  const delimiter = "\r\n--" + boundary + "\r\n";
-  const closeDelim = "\r\n--" + boundary + "--";
-
-  const metadata = { mimeType: "application/json" };
-
-  const body =
-    delimiter + "Content-Type: application/json\r\n\r\n" + JSON.stringify(metadata) +
-    delimiter + "Content-Type: application/json\r\n\r\n" + contentStr +
-    closeDelim;
-
-  const request = gapi.client.request({
-    path: "/upload/drive/v3/files/" + fileId,
-    method: "PATCH",
-    params: { uploadType: "multipart" },
-    headers: { "Content-Type": `multipart/related; boundary="${boundary}"` },
-    body
-  });
-  const res = await request;
-  return res.result.id;
-}
-
-// DRIVE LOGIN
-window.driveLogin = async function () {
-  try {
-    await initDriveClient();
-    await ensureGIS();
-
-    const tokenClient = google.accounts.oauth2.initTokenClient({
+window.driveLogin = async function(){
+  try{
+    await init();
+    if(!window.google || !window.google.accounts) await loadScript("https://accounts.google.com/gsi/client");
+    const tc=google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
-      scope: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email",
-      callback: async (resp) => {
-        if (!resp || !resp.access_token) {
-          alert("❌ Drive login failed");
-          return;
-        }
-
-        const token = resp.access_token;
-
-        window.__driveAccessToken = token;
-        window.__driveConnected = true;
-
-        localStorage.setItem("DRIVE_ACCESS_TOKEN", token);
-        localStorage.setItem("DRIVE_CONNECTED", "1");
-
-        gapi.client.setToken({ access_token: token });
-
-        try {
-          const me = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-            headers: { Authorization: "Bearer " + token }
-          }).then(r => r.json());
-
-          window.__driveUserEmail = me.email || "";
+      scope:"https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email",
+      callback: async (resp)=>{
+        if(!resp || !resp.access_token){ if(!opts.silent) alert("❌ Drive login failed"); return; }
+        window.__driveAccessToken=resp.access_token;
+        window.__driveConnected=true;
+        localStorage.setItem("DRIVE_ACCESS_TOKEN",resp.access_token);
+        localStorage.setItem("DRIVE_CONNECTED","1");
+        try{
+          const me=await fetch("https://www.googleapis.com/oauth2/v3/userinfo",{headers:{Authorization:"Bearer "+resp.access_token}}).then(r=>r.json());
+          window.__driveUserEmail=me.email||"";
           localStorage.setItem("DRIVE_USER_EMAIL", window.__driveUserEmail);
-        } catch (e) {}
-
-        window.updateDriveStatusUI && window.updateDriveStatusUI();
-
-        // ✅ inform app
-        try {
-          if (window.onDriveLoginSuccess) window.onDriveLoginSuccess();
-        } catch (e) {}
-
-        alert("✅ Drive Login successful");
-
-        setTimeout(() => window.autoSyncFromDrive && window.autoSyncFromDrive(), 1200);
+        }catch(e){}
+        setUI();
+        if(window.onDriveLoginSuccess) window.onDriveLoginSuccess();
+        startAutoSync();
       }
     });
-
-    tokenClient.requestAccessToken({ prompt: "" });
-  } catch (err) {
-    console.error(err);
-    alert("❌ Drive Login error");
-  }
+    tc.requestAccessToken({prompt:""});
+  }catch(e){ console.error(e); if(!opts.silent) alert("❌ Drive init/login failed"); }
 };
 
-// BACKUP
-window.backupToDrive = async function (dataObj) {
-  if (!window.__driveConnected) { alert("❌ Drive Login first"); return false; }
-  if (__backupLock) return false;
-
-  __backupLock = true;
-  try {
-    await ensureDriveReady();
-
-    const contentStr = JSON.stringify(dataObj, null, 2);
-    const existingId = await findBackupFileId();
-
-    if (existingId) await updateBackupFile(existingId, contentStr);
-    else await createBackupFile(contentStr);
-
-    localStorage.setItem("LAST_AUTO_BACKUP_TS", String(Date.now()));
-    return true;
-
-  } catch (err) {
-    console.error("Backup error:", err);
-    alert("❌ Backup failed");
-    return false;
-  } finally {
-    __backupLock = false;
-  }
+window.driveLogout = async function(){
+  const token=window.__driveAccessToken||"";
+  window.__driveAccessToken="";
+  window.__driveConnected=false;
+  window.__driveUserEmail="";
+  localStorage.removeItem("DRIVE_ACCESS_TOKEN");
+  localStorage.removeItem("DRIVE_CONNECTED");
+  localStorage.removeItem("DRIVE_USER_EMAIL");
+  try{ if(token) await fetch("https://oauth2.googleapis.com/revoke?token="+encodeURIComponent(token),{method:"POST"}); }catch(e){}
+  setUI();
+  location.reload();
 };
 
-// RESTORE
-window.restoreFromDrive = async function () {
-  if (!window.__driveConnected) { alert("❌ Drive Login first"); return; }
-
-  try {
-    await ensureDriveReady();
-    const fileId = await findBackupFileId();
-    if (!fileId) { alert("❌ No backup found in Drive for this business"); return; }
-
-    const res = await gapi.client.drive.files.get({ fileId, alt: "media" });
-    const backup = (typeof res.body === "string") ? JSON.parse(res.body) : res.result;
-
-    if (window.applyBackupObject) {
-      window.applyBackupObject(backup);
-      alert("✅ Restore done");
-    } else {
-      alert("❌ applyBackupObject missing");
-    }
-  } catch (err) {
-    console.error(err);
-    alert("❌ Restore failed");
-  }
+window.backupToDrive = async function(opts={}){
+  try{
+    if(!window.__driveConnected || !window.__driveAccessToken) { if(!opts.silent) alert("❌ Please Drive Login first"); return; }
+    if(!window.collectAppBackupData) return alert("❌ collectAppBackupData() missing in app.js");
+    const data=window.collectAppBackupData();
+    await upload(JSON.stringify(data,null,2));
+    if(!opts.silent) alert("✅ Backup uploaded to Drive");
+  }catch(e){ console.error(e); alert("❌ Backup failed (Open console for details)"); }
 };
 
-// AUTO BACKUP
-let __autoBackupTimer = null;
-window.scheduleAutoBackup = function (delayMs = AUTO_BACKUP_DELAY_MS) {
-  try {
-    if (!window.__driveConnected) return;
-    clearTimeout(__autoBackupTimer);
-    __autoBackupTimer = setTimeout(async () => {
-      try {
-        if (typeof collectAppBackupData !== "function") return;
-        const obj = collectAppBackupData();
-        await window.backupToDrive(obj);
-      } catch (e) {}
-    }, delayMs);
-  } catch (e) {}
+window.restoreFromDrive = async function(opts={}){
+  try{
+    if(!window.__driveConnected || !window.__driveAccessToken) { if(!opts.silent) alert("❌ Please Drive Login first"); return; }
+    const txt=await download();
+    if(!txt) return;
+    const obj=JSON.parse(txt);
+    if(window.applyAppRestoreData) window.applyAppRestoreData(obj);
+    else alert("❌ applyAppRestoreData() missing in app.js");
+  }catch(e){ console.error(e); alert("❌ Restore failed (Open console for details) "); }
+};
+})();
+
+// ---- Auto Sync (Fast) ----
+
+function startAutoSync(){
+  if(__autoSyncTimer) return;
+  __autoSyncTimer = setInterval(async ()=>{
+    try{
+      if(!window.__driveConnected) return;
+      // check Drive file modifiedTime
+      const name = window.getActiveDriveBackupFileName ? window.getActiveDriveBackupFileName() : "TatvaPro_Backup.json";
+      const q = encodeURIComponent(`name='${name}' and trashed=false`);
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&spaces=appDataFolder`,{
+        headers:{Authorization:`Bearer ${window.__driveAccessToken}`}
+      });
+      const js = await res.json();
+      const f = js.files && js.files[0];
+      if(!f) return;
+      const driveTs = Date.parse(f.modifiedTime)||0;
+      const lastPull = parseInt(localStorage.getItem("DRIVE_LAST_PULL_TS")||"0",10);
+      const localTs = parseInt(localStorage.getItem("LOCAL_LAST_TS")||"0",10);
+      // If Drive newer than what we've pulled AND newer than local changes -> pull
+      if(driveTs>lastPull && driveTs>localTs){
+        await window.restoreFromDrive({silent:true});
+        localStorage.setItem("DRIVE_LAST_PULL_TS", String(driveTs));
+      }
+    }catch(e){ /* silent */ }
+  }, AUTO_SYNC_INTERVAL_MS);
+}
+
+window.scheduleAutoBackup = function(){
+  try{
+    if(!window.__driveConnected) return;
+    clearTimeout(__backupDebounceTimer);
+    __backupDebounceTimer = setTimeout(async ()=>{
+      try{
+        await window.backupToDrive({silent:true});
+      }catch(e){}
+    }, 4000);
+  }catch(e){}
 };
 
-// AUTO SYNC
-window.autoSyncFromDrive = async function () {
-  if (!window.__driveConnected) return;
-  if (__syncLock) return;
-  __syncLock = true;
-
-  try {
-    await ensureDriveReady();
-    const fileId = await findBackupFileId();
-    if (!fileId) return;
-
-    const res = await gapi.client.drive.files.get({ fileId, alt: "media" });
-    const backup = (typeof res.body === "string") ? JSON.parse(res.body) : res.result;
-
-    const driveTs = Number(backup.ts || 0);
-    const localTs = Number(localStorage.getItem("LOCAL_LAST_TS") || "0");
-
-    if (driveTs > localTs && window.applyBackupObject) {
-      window.applyBackupObject(backup);
-      localStorage.setItem("LOCAL_LAST_TS", String(driveTs));
-    }
-  } catch (e) {
-    console.warn("AutoSync failed:", e);
-  } finally {
-    __syncLock = false;
-  }
-};
-
-// init auto sync
-setTimeout(() => window.autoSyncFromDrive && window.autoSyncFromDrive(), 2000);
-setInterval(() => window.autoSyncFromDrive && window.autoSyncFromDrive(), AUTO_SYNC_INTERVAL_MS);
-
-console.log("✅ gdrive.js loaded (FINAL)");
