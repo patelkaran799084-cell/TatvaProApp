@@ -149,17 +149,40 @@ async function updateBackupFile(fileId, contentStr){
 
 // --------------------------------------
 // DRIVE LOGIN
-window.driveLogin = async function(){
+window.driveLogin = async function(forcePrompt=false){
   try{
     await initDriveClient();
     await ensureGIS();
+
+    // If we already have a valid token, just mark connected and return.
+    const savedToken = localStorage.getItem("DRIVE_ACCESS_TOKEN");
+    if(savedToken && !forcePrompt){
+      window.__driveAccessToken = savedToken;
+      window.__driveConnected = true;
+      gapi.client.setToken({access_token:savedToken});
+      try{
+        const me = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+          headers:{Authorization:"Bearer "+savedToken}
+        }).then(r=>r.json());
+        if(me && me.email){
+          window.__driveUserEmail = me.email;
+          localStorage.setItem("DRIVE_USER_EMAIL", me.email);
+          localStorage.setItem("DRIVE_CONNECTED", "1");
+          window.refreshBusinessSelector && window.refreshBusinessSelector();
+        }
+      }catch(e){}
+      return true;
+    }
+
+    const promptMode = forcePrompt || !savedToken ? "consent" : "";
 
     const tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email",
       callback: async (resp)=>{
         if(!resp || !resp.access_token){
-          alert("❌ Drive login failed"); return;
+          alert("❌ Drive login failed"); 
+          return;
         }
         const token = resp.access_token;
         window.__driveAccessToken = token;
@@ -174,23 +197,41 @@ window.driveLogin = async function(){
           const me = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
             headers:{Authorization:"Bearer "+token}
           }).then(r=>r.json());
-          window.__driveUserEmail = me.email || "";
-          localStorage.setItem("DRIVE_USER_EMAIL", window.__driveUserEmail);
-        }catch(e){}
+          if(me && me.email){
+            window.__driveUserEmail = me.email;
+            localStorage.setItem("DRIVE_USER_EMAIL", me.email);
+          }
+        }catch(e){
+          console.warn("userinfo fetch failed", e);
+        }
 
-        window.updateDriveStatusUI && window.updateDriveStatusUI();
-        alert("✅ Drive Login successful");
-
-        // sync once after login
-        setTimeout(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), 1500);
+        // Update UI
+        try{ window.refreshBusinessSelector && window.refreshBusinessSelector(); }catch(e){}
+        alert("✅ Drive Connected: "+(window.__driveUserEmail||""));
       }
     });
 
-    tokenClient.requestAccessToken({prompt:"consent"});
+    // Request token (this will open popup)
+    tokenClient.requestAccessToken({prompt: promptMode});
+    return true;
+
   }catch(err){
     console.error(err);
-    alert("❌ Drive Login error");
+    alert("❌ Drive login error. Please allow popups & try again.");
+    return false;
   }
+};
+
+// Optional logout
+window.driveLogout = function(){
+  localStorage.removeItem("DRIVE_ACCESS_TOKEN");
+  localStorage.removeItem("DRIVE_CONNECTED");
+  localStorage.removeItem("DRIVE_USER_EMAIL");
+  window.__driveAccessToken = null;
+  window.__driveConnected = false;
+  window.__driveUserEmail = "";
+  try{ gapi.client.setToken(null); }catch(e){}
+  alert("✅ Drive disconnected");
 };
 
 // --------------------------------------
@@ -312,11 +353,3 @@ setTimeout(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), 2500);
 setInterval(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), AUTO_SYNC_INTERVAL_MS);
 
 console.log("✅ gdrive.js LOCKED stable loaded");
-
-
-// sync when app comes to foreground
-document.addEventListener("visibilitychange", ()=>{
-  if(!document.hidden){
-    setTimeout(()=>window.autoSyncFromDrive && window.autoSyncFromDrive(), 800);
-  }
-});
