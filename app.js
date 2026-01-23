@@ -831,3 +831,30 @@ window.applyAppRestoreData = function(dataObj){
     alert('✅ Restore Done');
   }catch(e){ console.error(e); alert('❌ Restore failed'); }
 };
+
+
+/********************
+ * ☁ DRIVE AUTO SYNC
+ ********************/
+(function(){
+  const KEY='tatva_auto_sync_enabled';
+  window.isAutoSyncEnabled=function(){
+    const v=localStorage.getItem(KEY);
+    if(v===null) return AUTO_SYNC_DEFAULT;
+    return v==='1';
+  };
+  window.setAutoSyncEnabled=function(on){
+    localStorage.setItem(KEY,on?'1':'0');
+  };
+  window.initAutoSync=function(){
+    // Start polling remote backup every 90s
+    if(window.__autoSyncTimer) return;
+    window.__autoSyncTimer=setInterval(async()=>{
+      if(!window.isAutoSyncEnabled()) return;
+      if(!(window.__driveConnected && window.__driveAccessToken)) return;
+      if(typeof window.checkDriveAndAutoRestore==='function'){
+        try{ await window.checkDriveAndAutoRestore(); }catch(e){ /*silent*/ }
+      }
+    }, 90000);
+  };
+})();
