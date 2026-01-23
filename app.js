@@ -1,3 +1,39 @@
+
+// === PATCH: Auto-create business for new email (no Use button needed) ===
+function maybeCreateBusinessForEmail(email){
+  try{
+    const meta = loadBizMeta();
+    const visible = getVisibleBusinesses(email);
+    if(visible && visible.length) return;
+
+    // Ask user for business name
+    const name = prompt("No business found for this email. Enter Business Name to create:", "My Business");
+    if(!name) return;
+
+    const id = "biz_" + Math.random().toString(36).slice(2,10) + "_" + Date.now().toString(36);
+    meta.businesses = meta.businesses || [];
+    meta.businesses.push({
+      id,
+      name: String(name).trim() || "My Business",
+      ownerEmail: String(email).trim(),
+      createdAt: Date.now()
+    });
+    saveBizMeta(meta);
+    localStorage.setItem(ACTIVE_BIZ_KEY, id);
+
+    // Init blank DB for this biz
+    try{
+      const key = DB_PREFIX + id;
+      if(!localStorage.getItem(key)){
+        localStorage.setItem(key, JSON.stringify({orders:[], team:["Self"], categories:["Model","Print","Color","Material","Other"]}));
+      }
+    }catch(e){}
+
+    if(window.renderBizDropdown) window.renderBizDropdown();
+    try{ location.reload(); }catch(e){}
+  }catch(e){ console.warn("maybeCreateBusinessForEmail failed", e); }
+}
+
 /*******************************************************
  * Tatva OS Pro - app.js (FINAL ADMIN LOCK + EMAIL LOGIN)
  * ✅ Email based login required (Drive)
@@ -63,20 +99,6 @@ function getVisibleBusinesses() {
   return meta.businesses.filter(b => (b.ownerEmail || "").toLowerCase().trim() === email);
 }
 
-
-
-// === PATCH: Auto-select first visible business for logged-in email ===
-function ensureActiveBizForEmail(email){
-  try{
-    const visible = getVisibleBusinesses(email);
-    if(!visible || !visible.length) return;
-    const activeId = localStorage.getItem(ACTIVE_BIZ_KEY);
-    const ok = activeId && visible.some(b=>b.id===activeId);
-    if(!ok){
-      localStorage.setItem(ACTIVE_BIZ_KEY, visible[0].id);
-    }
-  }catch(e){ console.warn("ensureActiveBizForEmail failed", e); }
-}
 function ensureActiveBizVisible() {
   const meta = loadBizMeta();
   const visible = getVisibleBusinesses();
