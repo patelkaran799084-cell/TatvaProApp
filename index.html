@@ -14,157 +14,152 @@
 
   <!-- TOP BAR -->
   <div class="topbar">
-    <div class="left">
-      <div class="brand">Tatva OS Pro</div>
-      <div id="driveStatus" class="smalltext">Drive: ❌ Not connected</div>
+    <div class="brand">
+      <span class="dot"></span>
+      <span class="title">Tatva OS Pro</span>
+      <div id="driveStatus" style="font-size:12px; opacity:0.85; margin-top:2px;">
+        Drive: ❌ Not connected
+      </div>
     </div>
 
-    <div class="right">
-      <!-- ✅ Drive Login/Logout -->
+    <div class="actions" id="topActions">
+
+      <!-- ✅ Business switch -->
+      <select id="bizSelect" class="btn-top" onchange="switchBusinessFromUI()"></select>
+
+      <!-- ✅ ADMIN only -->
+      <button id="btnBiz" class="btn-top" style="display:none;" onclick="openBusinessMgr()">🏢 Business</button>
+
+      <button class="btn-top" onclick="openTeamMgr()">👥 Team</button>
+      <button class="btn-top" onclick="openCategoryMgr()">🗂 Category</button>
+
+      <!-- ✅ DRIVE (Updated) -->
       <button id="btnDriveLogin" class="btn-top" onclick="driveLogin()">🔐 Drive Login</button>
       <button id="btnDriveLogout" class="btn-top" style="display:none;" onclick="driveLogout()">🚪 Drive Logout</button>
 
       <button class="btn-top" onclick="backupToDrive(collectAppBackupData())">☁ Backup</button>
       <button class="btn-top" onclick="restoreFromDrive()">☁ Restore</button>
 
-      <button class="btn-top" onclick="openBusinessMgr()">🏢 Business</button>
-      <button class="btn-top" onclick="openCategoryMgr()">🗂 Category</button>
+      <!-- LOCAL -->
+      <button class="btn-top" onclick="backupData()">⬇ Save</button>
+
+      <label class="btn-top" style="cursor:pointer;">
+        ⬆ Load
+        <input type="file" accept=".json" style="display:none" onchange="restoreDataFromFile(event)" />
+      </label>
+
     </div>
   </div>
 
-  <!-- MAIN -->
+
+  <!-- MAIN CONTAINER -->
   <div class="container">
 
-    <!-- BUSINESS SELECT -->
-    <div class="card">
-      <div class="row">
-        <div class="field">
-          <label>Business</label>
-          <select id="bizSelect" onchange="onBizChanged()"></select>
+    <!-- LOGIN REQUIRED OVERLAY -->
+    <div id="loginOverlay" class="overlay" style="display:none;">
+      <div class="modal">
+        <div class="big" style="margin-bottom:8px;">🔒 Login Required</div>
+        <div style="font-size:13px; color:#444; margin-bottom:12px;">
+          App use karva mate pehla Drive Login required che.<br/>
+          Login pachhi tamaru business auto open thase.
         </div>
-        <div class="field">
-          <label>Search</label>
-          <input id="searchInput" type="text" placeholder="Search customer / mobile / item" oninput="renderAll()" />
-        </div>
+        <button class="btn" onclick="driveLogin()">🔐 Drive Login</button>
+        <div id="adminEmailHint" style="font-size:12px;color:#666;margin-top:10px;"></div>
       </div>
     </div>
 
-    <!-- SUMMARY -->
-    <div class="grid2">
-      <div class="card">
-        <div class="big">Orders</div>
-        <div class="row">
-          <div class="stat">
-            <div class="label">Total Orders</div>
-            <div id="statOrders" class="value">0</div>
-          </div>
-          <div class="stat">
-            <div class="label">Total Amount</div>
-            <div id="statTotal" class="value">0</div>
-          </div>
-        </div>
-      </div>
 
-      <div class="card">
-        <div class="big">Net</div>
-        <div class="row">
-          <div class="stat">
-            <div class="label">Income</div>
-            <div id="statIncome" class="value">0</div>
-          </div>
-          <div class="stat">
-            <div class="label">Expense</div>
-            <div id="statExpense" class="value">0</div>
-          </div>
-          <div class="stat">
-            <div class="label">Net</div>
-            <div id="statNet" class="value">0</div>
-          </div>
-        </div>
+    <!-- STATS -->
+    <div class="stats">
+      <div class="stat-card">
+        <div id="statOrders">0</div>
+        <small>Total Orders</small>
+      </div>
+      <div class="stat-card">
+        <div id="statTotal">0</div>
+        <small>Total Amount</small>
+      </div>
+      <div class="stat-card">
+        <div id="statIncome">0</div>
+        <small>Income</small>
+      </div>
+      <div class="stat-card">
+        <div id="statExpense">0</div>
+        <small>Expense</small>
       </div>
     </div>
 
     <!-- ACTIONS -->
-    <div class="card">
-      <div class="row">
-        <button class="btn" onclick="openAddOrder()">➕ Add Order</button>
-        <button class="btn" onclick="openIncome()">➕ Add Income</button>
-        <button class="btn" onclick="openExpense()">➖ Add Expense</button>
-        <button class="btn" onclick="exportExcel()">📤 Export</button>
-      </div>
+    <div class="section-title">Actions</div>
+    <div class="action-row">
+      <button class="btn" onclick="openAddOrder()">➕ Add Order</button>
+      <button class="btn" onclick="openIncome()">➕ Add Income</button>
+      <button class="btn" onclick="openExpense()">➖ Add Expense</button>
+      <button class="btn" onclick="exportExcel()">📤 Export</button>
     </div>
 
-    <!-- ORDERS LIST -->
-    <div class="card">
-      <div class="big">Orders List</div>
-      <div id="ordersList" class="list"></div>
-    </div>
+    <!-- ORDERS -->
+    <div class="section-title">Orders List</div>
+    <div id="ordersList" class="list-box"></div>
 
-    <!-- INCOME LIST -->
-    <div class="card">
-      <div class="big">Income List</div>
-      <div id="incomeList" class="list"></div>
-    </div>
+    <!-- INCOME -->
+    <div class="section-title">Income List</div>
+    <div id="incomeList" class="list-box"></div>
 
-    <!-- EXPENSE LIST -->
-    <div class="card">
-      <div class="big">Expense List</div>
-      <div id="expenseList" class="list"></div>
-    </div>
+    <!-- EXPENSE -->
+    <div class="section-title">Expense List</div>
+    <div id="expenseList" class="list-box"></div>
 
   </div>
 
-  <!-- OVERLAY: ADD ORDER -->
+
+  <!-- OVERLAY: ORDER -->
   <div id="overlay-order" class="overlay" style="display:none;">
     <div class="modal">
       <div class="big">Add Order</div>
 
       <div class="row">
-        <div class="field">
-          <label>Date</label>
-          <input id="ordDate" type="date" />
-        </div>
-        <div class="field">
-          <label>Customer Name</label>
-          <input id="ordName" type="text" placeholder="Name" />
-        </div>
+        <label>Date</label>
+        <input id="ordDate" type="date" />
       </div>
 
       <div class="row">
-        <div class="field">
-          <label>Mobile</label>
-          <input id="ordMobile" type="text" placeholder="Mobile" />
-        </div>
-        <div class="field">
-          <label>Category</label>
-          <select id="ordCategory"></select>
-        </div>
+        <label>Customer Name</label>
+        <input id="ordName" type="text" placeholder="Name" />
       </div>
 
       <div class="row">
-        <div class="field">
-          <label>Item</label>
-          <input id="ordItem" type="text" placeholder="Item details" />
-        </div>
-        <div class="field">
-          <label>Amount</label>
-          <input id="ordAmount" type="number" placeholder="Amount" />
-        </div>
+        <label>Mobile</label>
+        <input id="ordMobile" type="text" placeholder="Mobile" />
       </div>
 
       <div class="row">
-        <div class="field">
-          <label>Status</label>
-          <select id="ordStatus">
-            <option value="Pending">Pending</option>
-            <option value="Done">Done</option>
-            <option value="Cancel">Cancel</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Note</label>
-          <input id="ordNote" type="text" placeholder="Note" />
-        </div>
+        <label>Category</label>
+        <select id="ordCategory"></select>
+      </div>
+
+      <div class="row">
+        <label>Item</label>
+        <input id="ordItem" type="text" placeholder="Item details" />
+      </div>
+
+      <div class="row">
+        <label>Amount</label>
+        <input id="ordAmount" type="number" placeholder="Amount" />
+      </div>
+
+      <div class="row">
+        <label>Status</label>
+        <select id="ordStatus">
+          <option value="Pending">Pending</option>
+          <option value="Done">Done</option>
+          <option value="Cancel">Cancel</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label>Note</label>
+        <input id="ordNote" type="text" placeholder="Note" />
       </div>
 
       <div class="row">
@@ -174,31 +169,30 @@
     </div>
   </div>
 
+
   <!-- OVERLAY: INCOME -->
   <div id="overlay-income" class="overlay" style="display:none;">
     <div class="modal">
       <div class="big">Add Income</div>
 
       <div class="row">
-        <div class="field">
-          <label>Date</label>
-          <input id="incDate" type="date" />
-        </div>
-        <div class="field">
-          <label>Title</label>
-          <input id="incTitle" type="text" placeholder="Income title" />
-        </div>
+        <label>Date</label>
+        <input id="incDate" type="date" />
       </div>
 
       <div class="row">
-        <div class="field">
-          <label>Amount</label>
-          <input id="incAmount" type="number" placeholder="Amount" />
-        </div>
-        <div class="field">
-          <label>Note</label>
-          <input id="incNote" type="text" placeholder="Note" />
-        </div>
+        <label>Title</label>
+        <input id="incTitle" type="text" placeholder="Income title" />
+      </div>
+
+      <div class="row">
+        <label>Amount</label>
+        <input id="incAmount" type="number" placeholder="Amount" />
+      </div>
+
+      <div class="row">
+        <label>Note</label>
+        <input id="incNote" type="text" placeholder="Note" />
       </div>
 
       <div class="row">
@@ -208,31 +202,30 @@
     </div>
   </div>
 
+
   <!-- OVERLAY: EXPENSE -->
   <div id="overlay-expense" class="overlay" style="display:none;">
     <div class="modal">
       <div class="big">Add Expense</div>
 
       <div class="row">
-        <div class="field">
-          <label>Date</label>
-          <input id="expDate" type="date" />
-        </div>
-        <div class="field">
-          <label>Title</label>
-          <input id="expTitle" type="text" placeholder="Expense title" />
-        </div>
+        <label>Date</label>
+        <input id="expDate" type="date" />
       </div>
 
       <div class="row">
-        <div class="field">
-          <label>Amount</label>
-          <input id="expAmount" type="number" placeholder="Amount" />
-        </div>
-        <div class="field">
-          <label>Note</label>
-          <input id="expNote" type="text" placeholder="Note" />
-        </div>
+        <label>Title</label>
+        <input id="expTitle" type="text" placeholder="Expense title" />
+      </div>
+
+      <div class="row">
+        <label>Amount</label>
+        <input id="expAmount" type="number" placeholder="Amount" />
+      </div>
+
+      <div class="row">
+        <label>Note</label>
+        <input id="expNote" type="text" placeholder="Note" />
       </div>
 
       <div class="row">
@@ -242,20 +235,20 @@
     </div>
   </div>
 
+
   <!-- OVERLAY: BUSINESS MANAGER -->
   <div id="overlay-biz" class="overlay" style="display:none;">
-    <div class="modal wide">
+    <div class="modal">
       <div class="big">Business Manager</div>
 
       <div class="row">
-        <div class="field">
-          <label>New Business Name</label>
-          <input id="newBizName" type="text" placeholder="Business name" />
-        </div>
-        <div class="field">
-          <label>Owner Email</label>
-          <input id="newBizOwnerEmail" type="email" placeholder="owner@gmail.com" />
-        </div>
+        <label>New Business Name</label>
+        <input id="newBizName" type="text" placeholder="Business name" />
+      </div>
+
+      <div class="row">
+        <label>Owner Email</label>
+        <input id="newBizOwnerEmail" type="email" placeholder="owner@gmail.com" />
       </div>
 
       <div class="row">
@@ -263,8 +256,8 @@
         <button class="btn" onclick="deleteBusiness()">🗑 Delete Selected</button>
       </div>
 
-      <div class="note">
-        <div class="smalltext">
+      <div class="row">
+        <div style="font-size:12px;color:#666;margin-top:6px;">
           Owner Email match login email ⇒ only that business visible.
         </div>
       </div>
@@ -275,16 +268,15 @@
     </div>
   </div>
 
+
   <!-- OVERLAY: CATEGORY MANAGER -->
   <div id="overlay-cat" class="overlay" style="display:none;">
-    <div class="modal wide">
+    <div class="modal">
       <div class="big">Category Manager</div>
 
       <div class="row">
-        <div class="field">
-          <label>New Category Name</label>
-          <input id="newCatName" type="text" placeholder="Category name" />
-        </div>
+        <label>New Category Name</label>
+        <input id="newCatName" type="text" placeholder="Category name" />
       </div>
 
       <div class="row">
@@ -298,17 +290,17 @@
     </div>
   </div>
 
+
   <!-- SCRIPTS -->
   <script src="app.js"></script>
   <script src="gdrive.js"></script>
 
-  <!-- ✅ PWA Service Worker Register (Fix update issue on phone) -->
+  <!-- ✅ PWA Service Worker Register (Fix mobile cache update issue) -->
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./service-worker.js");
     }
 
-    // Update UI at load
     window.addEventListener("load", () => {
       if (window.updateDriveStatusUI) window.updateDriveStatusUI();
     });
