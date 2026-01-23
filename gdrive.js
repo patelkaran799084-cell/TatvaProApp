@@ -214,7 +214,11 @@ window.checkDriveAndAutoRestore = async function(){
     // restore only if remote is newer than local and not already pulled
     if(remoteTs>Math.max(lastPull, localLast)){
       console.log("[AutoSync] Newer remote backup detected, pulling...");
-      await download(); // existing function will apply restore
+      const txt = await download();
+      if(!txt) return;
+      let obj=null;
+      try{ obj = JSON.parse(txt); }catch(e){ console.warn('[AutoSync] Invalid JSON in remote backup'); return; }
+      if(window.applyAppRestoreData) window.applyAppRestoreData(obj);
       localStorage.setItem("DRIVE_LAST_PULL_REMOTE_TS", String(remoteTs));
       console.log("[AutoSync] Auto restore done");
     }
@@ -222,3 +226,18 @@ window.checkDriveAndAutoRestore = async function(){
     console.warn("[AutoSync] Auto restore check failed", e);
   }
 };
+
+// Fast sync poller (default 10s)
+let __autoSyncInterval=null;
+window.startAutoSyncPolling = function(periodMs=10000){
+  try{ if(__autoSyncInterval) clearInterval(__autoSyncInterval); }catch(e){}
+  __autoSyncInterval=setInterval(()=>{ window.checkDriveAndAutoRestore && window.checkDriveAndAutoRestore(); }, periodMs);
+  console.log('[AutoSync] Polling started', periodMs);
+};
+
+// Start polling when connected
+setTimeout(()=>{
+  if(window.__driveConnected){
+    window.startAutoSyncPolling(10000);
+  }
+}, 600);
