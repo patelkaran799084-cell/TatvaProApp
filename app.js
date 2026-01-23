@@ -10,6 +10,7 @@ const ADMIN_EMAIL = "patelkaran799084@gmail.com";
 const ADMIN_PIN = "2580"; // change if needed
 
 const BIZ_META_KEY = "tatva_biz_meta_v3";
+const ALLOWED_EMAILS_KEY = "tatva_allowed_emails_v1";
 
 // email from drive login (set in gdrive.js)
 function getLoggedEmail() {
@@ -19,19 +20,20 @@ function isAdmin() {
   return getLoggedEmail() === ADMIN_EMAIL.toLowerCase();
 }
 
-// Default meta: 1 business owned by admin
+// Default meta
 function defaultMeta() {
   return {
-    activeBizId: "biz_main",
-    businesses: [
-      { id: "biz_main", name: "Main Business", ownerEmail: ADMIN_EMAIL.toLowerCase() }
+    businesses: [],
+    activeBizIdByEmail: {}
+  };
+}
     ]
   };
 }
 
 function loadBizMeta() {
   let meta = JSON.parse(localStorage.getItem(BIZ_META_KEY) || "null");
-  if (!meta || !meta.businesses || !meta.activeBizId) {
+  if (!meta || !Array.isArray(meta.businesses) || !meta.activeBizIdByEmail) {
     meta = defaultMeta();
     localStorage.setItem(BIZ_META_KEY, JSON.stringify(meta));
   }
@@ -39,6 +41,33 @@ function loadBizMeta() {
 }
 function saveBizMeta(meta) { localStorage.setItem(BIZ_META_KEY, JSON.stringify(meta)); }
 
+function loadAllowedEmails() {
+  return JSON.parse(localStorage.getItem(ALLOWED_EMAILS_KEY) || "[]");
+}
+function saveAllowedEmails(list) {
+  localStorage.setItem(ALLOWED_EMAILS_KEY, JSON.stringify(list || []));
+}
+function isEmailAllowed(email) {
+  email = (email || "").toLowerCase().trim();
+  if (!email) return false;
+  const list = loadAllowedEmails();
+  return list.includes(email);
+}
+
+function ensureBusinessForUser(email) {
+  email = (email || "").toLowerCase().trim();
+  const meta = loadBizMeta();
+  let biz = meta.businesses.find(b => (b.ownerEmail || "") === email);
+  if (!biz) {
+    const nm = prompt("Enter your Business Name:");
+    if (!nm) return null;
+    biz = { id: "biz_" + Date.now(), name: nm.trim(), ownerEmail: email };
+    meta.businesses.push(biz);
+  }
+  meta.activeBizIdByEmail[email] = biz.id;
+  saveBizMeta(meta);
+  return biz;
+}
 function getDBKey(bizId) { return `tatva_pro_db__${bizId}`; }
 
 function emptyDB() {
@@ -75,7 +104,11 @@ function ensureActiveBizVisible() {
   }
 }
 
-function getActiveBizId() { return loadBizMeta().activeBizId; }
+function getActiveBizId() {
+  const email = getLoggedEmail();
+  const meta = loadBizMeta();
+  return (meta.activeBizIdByEmail && meta.activeBizIdByEmail[email]) || null;
+}
 
 window.renderBizDropdown = function () {
   ensureActiveBizVisible();
@@ -194,6 +227,25 @@ function lockAppUI(locked) {
 }
 
 window.onDriveLoginSuccess = function () {
+  const email = getLoggedEmail();
+  if (!email) return;
+
+  if (!isAdmin() && !isEmailAllowed(email)) {
+    lockAppUI(true);
+    const msg = document.getElementById("driveStatus");
+    if (msg) msg.innerText = "❌ Access not allowed for this email";
+    alert("❌ Access not allowed for this email");
+    return;
+  }
+
+  if (!isAdmin()) {
+    const biz = ensureBusinessForUser(email);
+    if (!biz) {
+      lockAppUI(true);
+      return;
+    }
+  }
+
   lockAppUI(false);
   updateAdminUI();
   loadDBForActiveBusiness();
@@ -624,49 +676,53 @@ window.unlockBizAdmin = function () {
 };
 
 function renderBizManagerList() {
-  const meta = loadBizMeta();
   const list = document.getElementById("biz-list");
+  if (!list) return;
+  const emails = loadAllowedEmails();
   list.innerHTML = "";
 
-  meta.businesses.forEach(b => {
-    const active = b.id === meta.activeBizId ? "✅ " : "";
+  if (emails.length === 0) {
+    list.innerHTML = `<div style="padding:10px;color:#666;">No allowed emails yet</div>`;
+    return;
+  }
+
+  emails.forEach(e => {
     list.innerHTML += `
-      <div class="list-item" style="gap:10px;">
-        <span>${active}<b>${b.name}</b><br>
-          <small style="color:#666;">Owner: ${(b.ownerEmail || "-")}</small>
+      <div class="list-item" style="gap:10px;align-items:center;">
+        <span><b>${e}</b></span>
+        <span style="margin-left:auto;display:flex;gap:6px;">
+          <button class="btn btn-red btn-sm" onclick="removeAllowedEmail('${e}')">Remove</button>
         </span>
-        <span style="display:flex;gap:6px;align-items:center;">
-          <button class="btn btn-sm" onclick="renameBusiness('${b.id}')">Rename</button>
-          <button class="btn btn-sm" onclick="setActiveBusiness('${b.id}')">Use</button>
-          <button class="btn btn-red btn-sm" onclick="deleteBusiness('${b.id}')">Delete</button>
-        </span>
-      </div>`;
+      </div>
+    `;
   });
 }
 
+window.addAllowedEmailUI = function(){
+  if (!__bizAdminUnlocked) return alert("Unlock with PIN first!");
+  const email = (document.getElementById("biz-new-owner")?.value || "").trim().toLowerCase();
+  if (!email || !email.includes("@")) return alert("Enter valid email");
+  const list = loadAllowedEmails();
+  if (!list.includes(email)) list.push(email);
+  localStorage.setItem(ALLOWED_EMAILS_KEY, JSON.stringify(list));
+  document.getElementById("biz-new-owner").value="";
+  renderBizManagerList();
+};
+
+window.removeAllowedEmail = function(email){
+  if (!__bizAdminUnlocked) return alert("Unlock with PIN first!");
+  const list = loadAllowedEmails().filter(x=>x!==email);
+  localStorage.setItem(ALLOWED_EMAILS_KEY, JSON.stringify(list));
+  renderBizManagerList();
+};
+
+// (legacy) business creation removed
 window.addBusiness = function () {
   if (!__bizAdminUnlocked) return alert("Unlock with PIN first!");
-
-  const nm = document.getElementById("biz-new-name").value.trim();
   const em = document.getElementById("biz-new-owner").value.trim().toLowerCase();
-
-  if (!nm) return alert("Business name required");
-  if (!em || !em.includes("@")) return alert("Valid owner email required");
-
-  const meta = loadBizMeta();
-  const id = "biz_" + Date.now();
-
-  meta.businesses.push({ id, name: nm, ownerEmail: em });
-  meta.activeBizId = id;
-  saveBizMeta(meta);
-
-  localStorage.setItem(getDBKey(id), JSON.stringify(emptyDB()));
-
-  document.getElementById("biz-new-name").value = "";
+  if (!em) return alert("Enter email");
+  addAllowedEmail(em);
   document.getElementById("biz-new-owner").value = "";
-
-  loadDBForActiveBusiness();
-  renderHome();
   renderBizManagerList();
 };
 

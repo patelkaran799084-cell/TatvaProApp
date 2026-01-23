@@ -1,4 +1,4 @@
-const CACHE_NAME = "tatva-pro-v41"; // ✅ change this number every update
+const CACHE_NAME = "tatva-pro-v42"; // ✅ change this number every update
 
 const ASSETS = [
   "./",

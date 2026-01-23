@@ -220,25 +220,16 @@
       </div>
 
       <div id="biz-panel" style="display:none;margin-top:12px;">
-        <h4 style="margin:0 0 8px;">All Businesses</h4>
+        <h4 style="margin:0 0 8px;">Allowed Emails</h4>
         <div id="biz-list"></div>
 
-        <h4 style="margin:14px 0 6px;">Add New Business</h4>
+        <h4 style="margin:14px 0 6px;">Add Allowed Email</h4>
         <div class="row-inputs">
-          <input id="biz-new-name" placeholder="Business Name" />
-          <input id="biz-new-owner" placeholder="Owner Email (bhai gmail)" />
-          <button class="btn btn-blue btn-sm" onclick="addBusiness()">Add</button>
+          <input id="biz-new-owner" placeholder="Email (bhai gmail)" />
+          <button class="btn btn-green btn-sm" onclick="addBusiness()">Add</button>
         </div>
-        <div style="font-size:12px;color:#666;margin-top:6px;">
-          Owner Email match login email ⇒ only that business visible.
-        </div>
-      </div>
-
-      <div class="row">
-        <button class="btn" onclick="document.getElementById('overlay-biz').style.display='none'">Close</button>
       </div>
     </div>
-  </div>
 
   <script src="app.js"></script>
   <script src="gdrive.js"></script>
