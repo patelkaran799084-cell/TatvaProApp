@@ -749,3 +749,38 @@ window.applyBackupObject = function (backup) {
     renderHome();
   }
 })();
+
+/***********************
+ * ✅ Drive Restore Handler (Added)
+ * gdrive.js calls applyAppRestoreData(data)
+ ***********************/
+window.applyAppRestoreData = function (dataObj) {
+  try {
+    if (!dataObj || typeof dataObj !== "object") {
+      alert("❌ Invalid backup data");
+      return;
+    }
+
+    // Replace db
+    db = dataObj;
+
+    // safety defaults
+    db.orders ||= [];
+    db.team ||= ["Self"];
+    db.categories ||= ["Model", "Print", "Color", "Material", "Other"];
+
+    saveDB();
+
+    // refresh UI
+    try { renderOrders && renderOrders(); } catch (e) {}
+    try { updateStats && updateStats(); } catch (e) {}
+    try { fillTeamDropdown && fillTeamDropdown(); } catch (e) {}
+    try { fillCategoryDropdown && fillCategoryDropdown(); } catch (e) {}
+
+    alert("✅ Drive Restore Done!");
+  } catch (e) {
+    console.error(e);
+    alert("❌ Restore failed in app.js");
+  }
+};
+
