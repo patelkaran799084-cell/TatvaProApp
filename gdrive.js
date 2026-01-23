@@ -1,10 +1,8 @@
 /*************************************************
- * Tatva OS Pro - gdrive.js (UPDATED FINAL)
- * ✅ Drive login (email)
- * ✅ Persistent login after refresh
- * ✅ Logout button (clear + revoke token)
- * ✅ Auto sync between phone + pc
- * ✅ Auto backup on changes
+ * Tatva OS Pro - gdrive.js (FINAL FIXED)
+ * ✅ Persistent Login (no re-login on refresh)
+ * ✅ Logout button
+ * ✅ Calls app.js hook: window.onDriveLoginSuccess()
  *************************************************/
 
 const CLIENT_ID =
@@ -13,67 +11,33 @@ const CLIENT_ID =
 const API_KEY =
   "AIzaSyBmk0MvlOyzLMBJHtOpuLRz1izmcZQr7x0";
 
-let __backupLock = false;
-let __syncLock = false;
-
-const IS_MOBILE =
-  /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-  (navigator.maxTouchPoints && navigator.maxTouchPoints > 1);
-
-const AUTO_BACKUP_DELAY_MS = IS_MOBILE ? 6000 : 2500;
-const AUTO_SYNC_INTERVAL_MS = IS_MOBILE ? 8000 : 5000;
-
-function getBackupFileName() {
-  return (
-    window.getBackupFileNameFromApp
-      ? window.getBackupFileNameFromApp()
-      : "TatvaPro_Main_Backup.json"
-  );
-}
+let __driveReady = false;
 
 function setDriveButtonsUI(connected) {
-  try {
-    const btnLogin = document.getElementById("btnDriveLogin");
-    const btnLogout = document.getElementById("btnDriveLogout");
+  const btnLogin = document.getElementById("btnDriveLogin");
+  const btnLogout = document.getElementById("btnDriveLogout");
 
-    if (btnLogin) btnLogin.style.display = connected ? "none" : "inline-block";
-    if (btnLogout) btnLogout.style.display = connected ? "inline-block" : "none";
-  } catch (e) {}
+  if (btnLogin) btnLogin.style.display = connected ? "none" : "inline-flex";
+  if (btnLogout) btnLogout.style.display = connected ? "inline-flex" : "none";
 }
 
 window.updateDriveStatusUI = function () {
-  try {
-    const el = document.getElementById("driveStatus");
-    if (!el) return;
+  const el = document.getElementById("driveStatus");
+  const ok = !!(window.__driveConnected && window.__driveAccessToken);
 
-    if (window.__driveConnected && window.__driveAccessToken) {
-      const email = window.__driveUserEmail || "Connected";
+  if (el) {
+    if (ok) {
+      const email = window.__driveUserEmail || "";
       el.innerText = `Drive: ✅ Connected (${email})`;
-      setDriveButtonsUI(true);
     } else {
       el.innerText = "Drive: ❌ Not connected";
-      setDriveButtonsUI(false);
     }
-  } catch (e) {}
+  }
+
+  setDriveButtonsUI(ok);
 };
 
-// ✅ restore session (auto login after refresh)
-(function restoreDriveSession() {
-  try {
-    const token = localStorage.getItem("DRIVE_ACCESS_TOKEN") || "";
-    const email = localStorage.getItem("DRIVE_USER_EMAIL") || "";
-    const ok = localStorage.getItem("DRIVE_CONNECTED") === "1";
-
-    if (ok && token) {
-      window.__driveAccessToken = token;
-      window.__driveUserEmail = email;
-      window.__driveConnected = true;
-    }
-  } catch (e) {}
-
-  setTimeout(() => window.updateDriveStatusUI && window.updateDriveStatusUI(), 400);
-})();
-
+// ✅ script loader
 async function loadScript(src) {
   return new Promise((resolve, reject) => {
     const s = document.createElement("script");
@@ -84,16 +48,10 @@ async function loadScript(src) {
   });
 }
 
-let __driveReady = false;
-
 async function initDriveClient() {
   if (__driveReady) return;
 
-  // load gapi
-  if (!window.gapi) {
-    await loadScript("https://apis.google.com/js/api.js");
-  }
-
+  if (!window.gapi) await loadScript("https://apis.google.com/js/api.js");
   await new Promise((resolve) => gapi.load("client", resolve));
 
   await gapi.client.init({
@@ -111,7 +69,38 @@ async function ensureDriveReady() {
   }
 }
 
+// ✅ restore session after refresh
+(function restoreDriveSession() {
+  try {
+    const token = localStorage.getItem("DRIVE_ACCESS_TOKEN") || "";
+    const email = localStorage.getItem("DRIVE_USER_EMAIL") || "";
+    const ok = localStorage.getItem("DRIVE_CONNECTED") === "1";
+
+    if (ok && token) {
+      window.__driveAccessToken = token;
+      window.__driveUserEmail = email;
+      window.__driveConnected = true;
+
+      // 🔥 IMPORTANT: unlock app on refresh too
+      setTimeout(() => {
+        window.updateDriveStatusUI && window.updateDriveStatusUI();
+        if (window.onDriveLoginSuccess) window.onDriveLoginSuccess();
+      }, 200);
+      return;
+    }
+  } catch (e) {}
+
+  setTimeout(() => window.updateDriveStatusUI && window.updateDriveStatusUI(), 200);
+})();
+
+function getBackupFileName() {
+  return window.getBackupFileNameFromApp
+    ? window.getBackupFileNameFromApp()
+    : "TatvaPro_Main_Backup.json";
+}
+
 async function findBackupFileId() {
+  await ensureDriveReady();
   const name = getBackupFileName();
   const q = `name='${name}' and trashed=false`;
 
@@ -134,10 +123,7 @@ async function uploadBackupJson(jsonStr) {
   const delimiter = "\r\n--" + boundary + "\r\n";
   const close_delim = "\r\n--" + boundary + "--";
 
-  const metadata = {
-    name,
-    mimeType: "application/json",
-  };
+  const metadata = { name, mimeType: "application/json" };
 
   const multipartRequestBody =
     delimiter +
@@ -170,7 +156,7 @@ async function downloadBackupJson() {
 
   const fileId = await findBackupFileId();
   if (!fileId) {
-    alert("❌ Drive backup file not found");
+    alert("❌ Drive backup file not found (pehla Backup karo)");
     return null;
   }
 
@@ -183,18 +169,11 @@ async function downloadBackupJson() {
   return await res.text();
 }
 
-// ✅ Login
+// ✅ Drive Login
 window.driveLogin = async function () {
   try {
     await initDriveClient();
 
-    // If already connected -> just update UI
-    if (window.__driveConnected && window.__driveAccessToken) {
-      window.updateDriveStatusUI && window.updateDriveStatusUI();
-      return;
-    }
-
-    // load google identity services
     if (!window.google || !window.google.accounts) {
       await loadScript("https://accounts.google.com/gsi/client");
     }
@@ -219,7 +198,7 @@ window.driveLogin = async function () {
 
         gapi.client.setToken({ access_token: token });
 
-        // fetch user email
+        // get email
         try {
           const me = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
             headers: { Authorization: "Bearer " + token },
@@ -231,51 +210,52 @@ window.driveLogin = async function () {
 
         window.updateDriveStatusUI && window.updateDriveStatusUI();
 
-        // inform app
-        if (window.onDriveConnected) window.onDriveConnected();
+        // 🔥 MOST IMPORTANT: unlock app
+        if (window.onDriveLoginSuccess) window.onDriveLoginSuccess();
       },
     });
 
-    tokenClient.requestAccessToken({ prompt: "" }); // ✅ silent if possible
+    tokenClient.requestAccessToken({ prompt: "" });
   } catch (err) {
     console.error(err);
-    alert("❌ Drive init/login failed");
+    alert("❌ Drive login/init failed");
   }
 };
 
-// ✅ Logout (Clear token + revoke)
+// ✅ Drive Logout
 window.driveLogout = async function () {
   try {
-    const token = window.__driveAccessToken || localStorage.getItem("DRIVE_ACCESS_TOKEN") || "";
+    const token =
+      window.__driveAccessToken ||
+      localStorage.getItem("DRIVE_ACCESS_TOKEN") ||
+      "";
 
-    // Clear app state
     window.__driveAccessToken = "";
     window.__driveConnected = false;
     window.__driveUserEmail = "";
 
-    try {
-      localStorage.removeItem("DRIVE_ACCESS_TOKEN");
-      localStorage.removeItem("DRIVE_CONNECTED");
-      localStorage.removeItem("DRIVE_USER_EMAIL");
-    } catch (e) {}
+    localStorage.removeItem("DRIVE_ACCESS_TOKEN");
+    localStorage.removeItem("DRIVE_CONNECTED");
+    localStorage.removeItem("DRIVE_USER_EMAIL");
 
-    // Clear gapi token
     try {
       if (window.gapi?.client) gapi.client.setToken(null);
     } catch (e) {}
 
-    // Revoke token
     if (token) {
       try {
-        await fetch("https://oauth2.googleapis.com/revoke?token=" + encodeURIComponent(token), {
-          method: "POST",
-          headers: { "Content-type": "application/x-www-form-urlencoded" },
-        });
+        await fetch(
+          "https://oauth2.googleapis.com/revoke?token=" + encodeURIComponent(token),
+          {
+            method: "POST",
+            headers: { "Content-type": "application/x-www-form-urlencoded" },
+          }
+        );
       } catch (e) {}
     }
 
     window.updateDriveStatusUI && window.updateDriveStatusUI();
-    alert("✅ Drive logout successful");
+    location.reload(); // simple & safe
   } catch (err) {
     console.error(err);
     alert("❌ Logout failed");
@@ -289,18 +269,12 @@ window.backupToDrive = async function (dataObj) {
       alert("❌ Please Drive Login first");
       return;
     }
-    if (__backupLock) return;
-    __backupLock = true;
-
     const jsonStr = JSON.stringify(dataObj || {}, null, 2);
     await uploadBackupJson(jsonStr);
-
     alert("✅ Backup uploaded to Drive");
   } catch (err) {
     console.error(err);
     alert("❌ Backup failed");
-  } finally {
-    __backupLock = false;
   }
 };
 
@@ -311,7 +285,6 @@ window.restoreFromDrive = async function () {
       alert("❌ Please Drive Login first");
       return;
     }
-
     const jsonStr = await downloadBackupJson();
     if (!jsonStr) return;
 
@@ -319,66 +292,12 @@ window.restoreFromDrive = async function () {
 
     if (window.applyAppRestoreData) {
       window.applyAppRestoreData(dataObj);
+      alert("✅ Restore successful");
     } else {
-      alert("❌ App restore handler not found");
+      alert("❌ Restore handler not found in app.js");
     }
-
-    alert("✅ Restore successful");
   } catch (err) {
     console.error(err);
     alert("❌ Restore failed");
   }
 };
-
-// AUTO BACKUP
-let __autoBackupTimer = null;
-window.scheduleAutoBackup = function (delayMs = AUTO_BACKUP_DELAY_MS) {
-  try {
-    if (!window.__driveConnected) return;
-    clearTimeout(__autoBackupTimer);
-
-    __autoBackupTimer = setTimeout(async () => {
-      try {
-        if (!window.__driveConnected || !window.__driveAccessToken) return;
-        const data = window.collectAppBackupData ? window.collectAppBackupData() : {};
-        const jsonStr = JSON.stringify(data || {}, null, 2);
-        await uploadBackupJson(jsonStr);
-        console.log("✅ Auto backup success");
-      } catch (e) {
-        console.log("Auto backup fail", e);
-      }
-    }, delayMs);
-  } catch (e) {}
-};
-
-// AUTO SYNC (polling)
-setInterval(async () => {
-  try {
-    if (!window.__driveConnected || !window.__driveAccessToken) return;
-    if (__syncLock) return;
-    __syncLock = true;
-
-    // download
-    const jsonStr = await downloadBackupJson();
-    if (!jsonStr) return;
-
-    // compare
-    const remote = JSON.parse(jsonStr);
-    const local = window.collectAppBackupData ? window.collectAppBackupData() : {};
-
-    const remoteHash = JSON.stringify(remote);
-    const localHash = JSON.stringify(local);
-
-    if (remoteHash !== localHash) {
-      // apply remote
-      if (window.applyAppRestoreData) {
-        window.applyAppRestoreData(remote);
-        console.log("✅ Sync applied from Drive");
-      }
-    }
-  } catch (e) {
-    // silent
-  } finally {
-    __syncLock = false;
-  }
-}, AUTO_SYNC_INTERVAL_MS);
