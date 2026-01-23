@@ -193,7 +193,6 @@ window.driveLogin = async function () {
         } catch (e) {}
 
         alert("✅ Drive Login successful");
-        try { window.onDriveLoginSuccess && window.onDriveLoginSuccess(); } catch(e) {}
 
         setTimeout(() => window.autoSyncFromDrive && window.autoSyncFromDrive(), 1200);
       }
