@@ -160,7 +160,7 @@ window.driveLogout = async function(){
 
 window.backupToDrive = async function(opts={}){
   try{
-    if(!window.__driveConnected || !window.__driveAccessToken) return if(!opts.silent) alert("❌ Please Drive Login first");
+    if(!window.__driveConnected || !window.__driveAccessToken) { if(!opts.silent) alert("❌ Please Drive Login first"); return; }
     if(!window.collectAppBackupData) return alert("❌ collectAppBackupData() missing in app.js");
     const data=window.collectAppBackupData();
     await upload(JSON.stringify(data,null,2));
@@ -170,7 +170,7 @@ window.backupToDrive = async function(opts={}){
 
 window.restoreFromDrive = async function(opts={}){
   try{
-    if(!window.__driveConnected || !window.__driveAccessToken) return if(!opts.silent) alert("❌ Please Drive Login first");
+    if(!window.__driveConnected || !window.__driveAccessToken) { if(!opts.silent) alert("❌ Please Drive Login first"); return; }
     const txt=await download();
     if(!txt) return;
     const obj=JSON.parse(txt);
