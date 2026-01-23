@@ -63,6 +63,20 @@ function getVisibleBusinesses() {
   return meta.businesses.filter(b => (b.ownerEmail || "").toLowerCase().trim() === email);
 }
 
+
+
+// === PATCH: Auto-select first visible business for logged-in email ===
+function ensureActiveBizForEmail(email){
+  try{
+    const visible = getVisibleBusinesses(email);
+    if(!visible || !visible.length) return;
+    const activeId = localStorage.getItem(ACTIVE_BIZ_KEY);
+    const ok = activeId && visible.some(b=>b.id===activeId);
+    if(!ok){
+      localStorage.setItem(ACTIVE_BIZ_KEY, visible[0].id);
+    }
+  }catch(e){ console.warn("ensureActiveBizForEmail failed", e); }
+}
 function ensureActiveBizVisible() {
   const meta = loadBizMeta();
   const visible = getVisibleBusinesses();
