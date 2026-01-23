@@ -711,97 +711,30 @@ window.deleteBusiness = function (bizId) {
   renderBizManagerList();
 };
 
-// Drive sync helpers (✅ FULL multi-business backup)
+// Drive sync helpers
 window.collectAppBackupData = function () {
-  // Backup everything: business meta + each business DB
-  const meta = loadBizMeta();
-  const all = {};
-  (meta.businesses || []).forEach(b => {
-    try {
-      const key = getDBKey(b.id);
-      const stored = JSON.parse(localStorage.getItem(key) || "null") || emptyDB();
-      stored.orders ||= [];
-      stored.team ||= ["Self"];
-      stored.categories ||= ["Model", "Print", "Color", "Material", "Other"];
-      all[b.id] = stored;
-    } catch (e) {
-      all[b.id] = emptyDB();
-    }
-  });
-
-  return {
-    app: "TatvaPro",
-    version: 41,
-    ts: Date.now(),
-    meta,
-    allDB: all
-  };
+  return { app: "TatvaPro", version: 40, ts: Date.now(), bizId: getActiveBizId(), db: db };
 };
 
 window.applyBackupObject = function (backup) {
-  if (!backup || typeof backup !== "object") return;
+  if (backup && backup.db) {
+    window.__isRestoring = true;
 
-  // Accept both old + new formats
-  const meta = backup.meta || null;
-  const allDB = backup.allDB || null;
+    db = backup.db;
+    db.orders ||= [];
+    db.team ||= ["Self"];
+    db.categories ||= ["Model", "Print", "Color", "Material", "Other"];
 
-  window.__isRestoring = true;
-
-  try {
-    // 1) Restore business meta first
-    if (meta && meta.businesses && meta.activeBizId) {
-      saveBizMeta(meta);
-    }
-
-    // 2) Restore databases
-    if (allDB && typeof allDB === "object") {
-      Object.keys(allDB).forEach(bizId => {
-        const key = getDBKey(bizId);
-        const data = allDB[bizId] || emptyDB();
-        data.orders ||= [];
-        data.team ||= ["Self"];
-        data.categories ||= ["Model", "Print", "Color", "Material", "Other"];
-        localStorage.setItem(key, JSON.stringify(data));
-      });
-    } else if (backup.db) {
-      // old single-business backup
-      const key = getDBKey(getActiveBizId());
-      const data = backup.db;
-      data.orders ||= [];
-      data.team ||= ["Self"];
-      data.categories ||= ["Model", "Print", "Color", "Material", "Other"];
-      localStorage.setItem(key, JSON.stringify(data));
-    }
-
+    const key = getDBKey(getActiveBizId());
+    localStorage.setItem(key, JSON.stringify(db));
     localStorage.setItem("LOCAL_LAST_TS", String(backup.ts || Date.now()));
 
-    // Reload active business and UI
-    loadDBForActiveBusiness();
-    renderBizDropdown();
     renderHome();
     if (currentId) renderDetail();
-  } finally {
+
     setTimeout(() => { window.__isRestoring = false; }, 1200);
   }
 };
-
-// Added for Drive restore
-window.applyAppRestoreData = function(dataObj){
-  try{
-    if(!dataObj || typeof dataObj!=='object'){ alert('❌ Invalid backup'); return; }
-    // If wrapper contains db/meta/allDB just forward
-    if(window.applyBackupObject) window.applyBackupObject(dataObj);
-    else{
-      // fallback old
-      if(dataObj.db) dataObj = dataObj.db;
-      window.db = dataObj;
-      if(typeof saveDB==='function') saveDB();
-      if(typeof renderHome==='function') renderHome();
-    }
-    alert('✅ Restore Done');
-  }catch(e){ console.error(e); alert('❌ Restore failed'); }
-};
-
 
 // INIT (lock until login)
 (function init() {
@@ -822,39 +755,13 @@ window.applyAppRestoreData = function(dataObj){
 window.applyAppRestoreData = function(dataObj){
   try{
     if(!dataObj || typeof dataObj!=='object'){ alert('❌ Invalid backup'); return; }
-    // If backup wrapper contains db
-    if(dataObj.db) dataObj = dataObj.db;
-    // Replace global db used in app
-    window.db = dataObj;
-    if(typeof saveDB==='function') saveDB();
-    if(typeof renderHome==='function') renderHome();
-    alert('✅ Restore Done');
+    // Backup wrapper
+    const backup = (dataObj && dataObj.app==="TatvaPro") ? dataObj : {app:"TatvaPro", ts: Date.now(), db: dataObj};
+    if(typeof window.applyBackupObject === "function"){
+      window.applyBackupObject(backup);
+      alert("✅ Restore Done");
+    }else{
+      alert("❌ applyBackupObject() missing in app.js");
+    }
   }catch(e){ console.error(e); alert('❌ Restore failed'); }
 };
-
-
-/********************
- * ☁ DRIVE AUTO SYNC
- ********************/
-(function(){
-  const KEY='tatva_auto_sync_enabled';
-  window.isAutoSyncEnabled=function(){
-    const v=localStorage.getItem(KEY);
-    if(v===null) return AUTO_SYNC_DEFAULT;
-    return v==='1';
-  };
-  window.setAutoSyncEnabled=function(on){
-    localStorage.setItem(KEY,on?'1':'0');
-  };
-  window.initAutoSync=function(){
-    // Start polling remote backup every 90s
-    if(window.__autoSyncTimer) return;
-    window.__autoSyncTimer=setInterval(async()=>{
-      if(!window.isAutoSyncEnabled()) return;
-      if(!(window.__driveConnected && window.__driveAccessToken)) return;
-      if(typeof window.checkDriveAndAutoRestore==='function'){
-        try{ await window.checkDriveAndAutoRestore(); }catch(e){ /*silent*/ }
-      }
-    }, 90000);
-  };
-})();

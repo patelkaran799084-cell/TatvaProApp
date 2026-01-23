@@ -39,19 +39,14 @@ function fileName(){
   return "TatvaPro_Backup.json";
 }
 
-async function listFileMeta(){
+async function listFile(){
   await init();
   gapi.client.setToken({access_token: window.__driveAccessToken});
   const name=fileName();
-  const q=`name='${name.replace(/'/g,"\'")}' and trashed=false`;
-  const r=await gapi.client.drive.files.list({q, fields:"files(id,name,modifiedTime,size)", spaces:"drive"});
+  const q=`name='${name.replace(/'/g,"\\'")}' and trashed=false`;
+  const r=await gapi.client.drive.files.list({q, fields:"files(id,name)", spaces:"drive"});
   const files=r?.result?.files||[];
-  return files.length?files[0]:null;
-}
-
-async function listFile(){
-  const meta=await listFileMeta();
-  return meta?meta.id:null;
+  return files.length?files[0].id:null;
 }
 
 async function upload(jsonStr){
@@ -175,69 +170,6 @@ window.restoreFromDrive = async function(){
     const obj=JSON.parse(txt);
     if(window.applyAppRestoreData) window.applyAppRestoreData(obj);
     else alert("❌ applyAppRestoreData() missing in app.js");
-  }catch(e){ console.error(e); alert("❌ Restore failed"); }
+  }catch(e){ console.error(e); alert("❌ Restore failed (Open console for details) "); }
 };
 })();
-
-/***********************
- * ☁ Auto Backup/Restore
- ***********************/
-let __backupTimer=null;
-window.scheduleAutoBackup = function(){
-  if(!window.__driveConnected) return;
-  if(!window.isAutoSyncEnabled || !window.isAutoSyncEnabled()) return;
-  clearTimeout(__backupTimer);
-  __backupTimer=setTimeout(async ()=>{
-    try{
-      const data = (window.collectAppBackupData ? window.collectAppBackupData() : null);
-      if(!data) return;
-      const jsonStr = JSON.stringify(data);
-      await upload(jsonStr);
-      localStorage.setItem("DRIVE_LAST_PUSH_TS", String(Date.now()));
-      console.log("[AutoSync] Backup pushed");
-    }catch(e){
-      console.warn("[AutoSync] Backup push failed", e);
-    }
-  }, 4000);
-};
-
-window.checkDriveAndAutoRestore = async function(){
-  try{
-    if(!window.__driveConnected) return;
-    if(!window.isAutoSyncEnabled || !window.isAutoSyncEnabled()) return;
-
-    const meta = await listFileMeta();
-    if(!meta) return;
-    const remoteTs = Date.parse(meta.modifiedTime||"") || 0;
-    const lastPull = parseInt(localStorage.getItem("DRIVE_LAST_PULL_REMOTE_TS")||"0",10);
-    const localLast = parseInt(localStorage.getItem("LOCAL_LAST_TS")||"0",10);
-    // restore only if remote is newer than local and not already pulled
-    if(remoteTs>Math.max(lastPull, localLast)){
-      console.log("[AutoSync] Newer remote backup detected, pulling...");
-      const txt = await download();
-      if(!txt) return;
-      let obj=null;
-      try{ obj = JSON.parse(txt); }catch(e){ console.warn('[AutoSync] Invalid JSON in remote backup'); return; }
-      if(window.applyAppRestoreData) window.applyAppRestoreData(obj);
-      localStorage.setItem("DRIVE_LAST_PULL_REMOTE_TS", String(remoteTs));
-      console.log("[AutoSync] Auto restore done");
-    }
-  }catch(e){
-    console.warn("[AutoSync] Auto restore check failed", e);
-  }
-};
-
-// Fast sync poller (default 10s)
-let __autoSyncInterval=null;
-window.startAutoSyncPolling = function(periodMs=10000){
-  try{ if(__autoSyncInterval) clearInterval(__autoSyncInterval); }catch(e){}
-  __autoSyncInterval=setInterval(()=>{ window.checkDriveAndAutoRestore && window.checkDriveAndAutoRestore(); }, periodMs);
-  console.log('[AutoSync] Polling started', periodMs);
-};
-
-// Start polling when connected
-setTimeout(()=>{
-  if(window.__driveConnected){
-    window.startAutoSyncPolling(10000);
-  }
-}, 600);
