@@ -783,4 +783,29 @@ window.applyAppRestoreData = function (dataObj) {
     alert("❌ Restore failed in app.js");
   }
 };
+/***********************
+ * ✅ Drive restore handler
+ ***********************/
+window.applyAppRestoreData = function (dataObj) {
+  try {
+    if (!dataObj || typeof dataObj !== "object") return alert("❌ Invalid backup");
+
+    // replace business db
+    window.db = dataObj;
+
+    // safe defaults
+    db.orders ||= [];
+    db.team ||= ["Self"];
+    db.categories ||= ["Model", "Print", "Color", "Material", "Other"];
+
+    // save + refresh
+    try { saveDB(); } catch (e) {}
+    try { renderHome(); } catch (e) {}
+
+    alert("✅ Restore Done!");
+  } catch (e) {
+    console.error(e);
+    alert("❌ Restore failed");
+  }
+};
 
