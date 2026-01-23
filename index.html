@@ -20,7 +20,7 @@
     </div>
 
     <div class="actions" id="topActions">
-      <!-- ✅ Business switch (Only businesses matching login email will show) -->
+      <!-- ✅ Business switch -->
       <select id="bizSelect" class="btn-top" onchange="switchBusinessFromUI()"></select>
 
       <!-- ✅ ADMIN only -->
@@ -29,7 +29,7 @@
       <button class="btn-top" onclick="openTeamMgr()">👥 Team</button>
       <button class="btn-top" onclick="openCategoryMgr()">🗂 Category</button>
 
-      <!-- ✅ DRIVE (Only changes here) -->
+      <!-- ✅ DRIVE (Only change) -->
       <button id="btnDriveLogin" class="btn-top" onclick="driveLogin()">🔐 Drive Login</button>
       <button id="btnDriveLogout" class="btn-top" style="display:none;" onclick="driveLogout()">🚪 Drive Logout</button>
 
@@ -101,7 +101,6 @@
   <!-- ORDER DETAILS MODAL -->
   <div id="modal-detail" class="modal">
     <div class="modal-box big">
-
       <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <h3 style="margin:0;">Order Details</h3>
         <button class="btn btn-red btn-sm" onclick="deleteOrder()">Delete</button>
@@ -126,14 +125,12 @@
 
       <div id="d-pending" class="pending"></div>
 
-      <!-- Tabs -->
       <div style="display:flex;gap:8px;margin:12px 0;">
         <button class="btn btn-sm" onclick="switchTab('income')">💰 Income</button>
         <button class="btn btn-sm" onclick="switchTab('expense')">🧾 Expense</button>
         <button class="btn btn-sm" onclick="switchTab('summary')">📌 Summary</button>
       </div>
 
-      <!-- TAB: INCOME -->
       <div id="tab-income">
         <h4 style="margin:10px 0 6px;">Income</h4>
         <div class="row-inputs">
@@ -144,7 +141,6 @@
         <div id="list-income"></div>
       </div>
 
-      <!-- TAB: EXPENSE -->
       <div id="tab-expense" style="display:none;">
         <h4 style="margin:10px 0 6px;">Expenses / Tasks</h4>
         <div class="row-inputs">
@@ -159,7 +155,6 @@
         <div id="list-tasks"></div>
       </div>
 
-      <!-- TAB: SUMMARY -->
       <div id="tab-summary" style="display:none;">
         <h4 style="margin:10px 0 6px;">Payment History</h4>
         <details style="background:#fff;border:1px solid #eee;border-radius:12px;padding:10px;margin-top:8px;">
@@ -209,7 +204,7 @@
     </div>
   </div>
 
-  <!-- ✅ BUSINESS MANAGER (ADMIN PIN) -->
+  <!-- BUSINESS MANAGER -->
   <div id="overlay-biz" class="overlay" style="display:none;">
     <div class="modal-box">
       <h3>Business Manager (Admin)</h3>
@@ -245,14 +240,12 @@
   <script src="app.js"></script>
   <script src="gdrive.js"></script>
 
-  <!-- ✅ ONLY ADD: SW register + updateDriveStatusUI -->
+  <!-- ✅ only small addition -->
   <script>
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./service-worker.js");
-    }
     window.addEventListener("load", () => {
       if (window.updateDriveStatusUI) window.updateDriveStatusUI();
     });
   </script>
+
 </body>
 </html>
