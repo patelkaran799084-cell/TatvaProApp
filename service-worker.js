@@ -1,5 +1,5 @@
 // Tatva OS Pro - Service Worker (FINAL)
-const CACHE_NAME = "tatva-os-pro-v60";
+const CACHE_NAME = "tatva-os-pro-v61";
 const CORE_ASSETS = ["./","./index.html","./style.css","./app.js","./gdrive.js","./manifest.json"];
 self.addEventListener("install",(e)=>{self.skipWaiting();e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(CORE_ASSETS)));});
 self.addEventListener("activate",(e)=>{e.waitUntil((async()=>{const keys=await caches.keys();await Promise.all(keys.map(k=>k!==CACHE_NAME?caches.delete(k):null));await self.clients.claim();})());});

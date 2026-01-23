@@ -711,30 +711,97 @@ window.deleteBusiness = function (bizId) {
   renderBizManagerList();
 };
 
-// Drive sync helpers
+// Drive sync helpers (✅ FULL multi-business backup)
 window.collectAppBackupData = function () {
-  return { app: "TatvaPro", version: 40, ts: Date.now(), bizId: getActiveBizId(), db: db };
+  // Backup everything: business meta + each business DB
+  const meta = loadBizMeta();
+  const all = {};
+  (meta.businesses || []).forEach(b => {
+    try {
+      const key = getDBKey(b.id);
+      const stored = JSON.parse(localStorage.getItem(key) || "null") || emptyDB();
+      stored.orders ||= [];
+      stored.team ||= ["Self"];
+      stored.categories ||= ["Model", "Print", "Color", "Material", "Other"];
+      all[b.id] = stored;
+    } catch (e) {
+      all[b.id] = emptyDB();
+    }
+  });
+
+  return {
+    app: "TatvaPro",
+    version: 41,
+    ts: Date.now(),
+    meta,
+    allDB: all
+  };
 };
 
 window.applyBackupObject = function (backup) {
-  if (backup && backup.db) {
-    window.__isRestoring = true;
+  if (!backup || typeof backup !== "object") return;
 
-    db = backup.db;
-    db.orders ||= [];
-    db.team ||= ["Self"];
-    db.categories ||= ["Model", "Print", "Color", "Material", "Other"];
+  // Accept both old + new formats
+  const meta = backup.meta || null;
+  const allDB = backup.allDB || null;
 
-    const key = getDBKey(getActiveBizId());
-    localStorage.setItem(key, JSON.stringify(db));
+  window.__isRestoring = true;
+
+  try {
+    // 1) Restore business meta first
+    if (meta && meta.businesses && meta.activeBizId) {
+      saveBizMeta(meta);
+    }
+
+    // 2) Restore databases
+    if (allDB && typeof allDB === "object") {
+      Object.keys(allDB).forEach(bizId => {
+        const key = getDBKey(bizId);
+        const data = allDB[bizId] || emptyDB();
+        data.orders ||= [];
+        data.team ||= ["Self"];
+        data.categories ||= ["Model", "Print", "Color", "Material", "Other"];
+        localStorage.setItem(key, JSON.stringify(data));
+      });
+    } else if (backup.db) {
+      // old single-business backup
+      const key = getDBKey(getActiveBizId());
+      const data = backup.db;
+      data.orders ||= [];
+      data.team ||= ["Self"];
+      data.categories ||= ["Model", "Print", "Color", "Material", "Other"];
+      localStorage.setItem(key, JSON.stringify(data));
+    }
+
     localStorage.setItem("LOCAL_LAST_TS", String(backup.ts || Date.now()));
 
+    // Reload active business and UI
+    loadDBForActiveBusiness();
+    renderBizDropdown();
     renderHome();
     if (currentId) renderDetail();
-
+  } finally {
     setTimeout(() => { window.__isRestoring = false; }, 1200);
   }
 };
+
+// Added for Drive restore
+window.applyAppRestoreData = function(dataObj){
+  try{
+    if(!dataObj || typeof dataObj!=='object'){ alert('❌ Invalid backup'); return; }
+    // If wrapper contains db/meta/allDB just forward
+    if(window.applyBackupObject) window.applyBackupObject(dataObj);
+    else{
+      // fallback old
+      if(dataObj.db) dataObj = dataObj.db;
+      window.db = dataObj;
+      if(typeof saveDB==='function') saveDB();
+      if(typeof renderHome==='function') renderHome();
+    }
+    alert('✅ Restore Done');
+  }catch(e){ console.error(e); alert('❌ Restore failed'); }
+};
+
 
 // INIT (lock until login)
 (function init() {
