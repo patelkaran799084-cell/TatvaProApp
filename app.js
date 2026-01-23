@@ -1,883 +1,766 @@
-/*************************************************
- * Tatva OS Pro - app.js (NEW CLEAN FINAL)
- * ✅ Works with your OLD index.html layout
- * ✅ 1 Email = 1 Business enforced
- * ✅ Drive hooks + Restore handler included
- * ✅ Business / Team / Category
- * ✅ Orders + Income + Expense/Tasks
- *************************************************/
+/*******************************************************
+ * Tatva OS Pro - app.js (FINAL ADMIN LOCK + EMAIL LOGIN)
+ * ✅ Email based login required (Drive)
+ * ✅ Admin only Business Manager button
+ * ✅ Multi business profiles (owner email)
+ *******************************************************/
 
-/* -------------------------------
-   GLOBAL STATE
---------------------------------*/
-let ACTIVE_EMAIL = "";
-let ACTIVE_BIZ_ID = "";
-let ACTIVE_ORDER_ID = "";
-
+// 🔐 Admin config
 const ADMIN_EMAIL = "patelkaran799084@gmail.com";
-const ADMIN_PIN = "1234"; // change if you want
+const ADMIN_PIN = "2580"; // change if needed
 
-/* -------------------------------
-   STORAGE KEYS
---------------------------------*/
-const META_KEY = "tatva_biz_meta_v4"; // business meta
-function DB_KEY(bizId) {
-  return `tatva_db_${bizId}`;
-}
+const BIZ_META_KEY = "tatva_biz_meta_v3";
 
-/* -------------------------------
-   BASIC HELPERS
---------------------------------*/
-function $(id) {
-  return document.getElementById(id);
+// email from drive login (set in gdrive.js)
+function getLoggedEmail() {
+  return (window.__driveUserEmail || "").toLowerCase().trim();
 }
-function nowId(prefix = "id") {
-  return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 9999)}`;
-}
-function safeText(t) {
-  return (t || "").toString().trim();
-}
-function money(n) {
-  const x = Number(n || 0);
-  return "₹" + x.toFixed(0);
-}
-function toDateStr(d) {
-  if (!d) return "";
-  try {
-    const dt = new Date(d);
-    if (isNaN(dt.getTime())) return "";
-    const yyyy = dt.getFullYear();
-    const mm = String(dt.getMonth() + 1).padStart(2, "0");
-    const dd = String(dt.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  } catch (e) {
-    return "";
-  }
+function isAdmin() {
+  return getLoggedEmail() === ADMIN_EMAIL.toLowerCase();
 }
 
-/* -------------------------------
-   BUSINESS META
---------------------------------*/
+// Default meta: 1 business owned by admin
+function defaultMeta() {
+  return {
+    activeBizId: "biz_main",
+    businesses: [
+      { id: "biz_main", name: "Main Business", ownerEmail: ADMIN_EMAIL.toLowerCase() }
+    ]
+  };
+}
+
 function loadBizMeta() {
-  try {
-    const raw = localStorage.getItem(META_KEY);
-    if (!raw) return { businesses: [], activeBizId: "" };
-    const obj = JSON.parse(raw);
-    obj.businesses ||= [];
-    obj.activeBizId ||= "";
-    return obj;
-  } catch (e) {
-    return { businesses: [], activeBizId: "" };
+  let meta = JSON.parse(localStorage.getItem(BIZ_META_KEY) || "null");
+  if (!meta || !meta.businesses || !meta.activeBizId) {
+    meta = defaultMeta();
+    localStorage.setItem(BIZ_META_KEY, JSON.stringify(meta));
   }
+  return meta;
 }
-function saveBizMeta(meta) {
-  localStorage.setItem(META_KEY, JSON.stringify(meta));
-}
+function saveBizMeta(meta) { localStorage.setItem(BIZ_META_KEY, JSON.stringify(meta)); }
 
-/* -------------------------------
-   DB STRUCTURE
---------------------------------*/
-function newEmptyDB() {
+function getDBKey(bizId) { return `tatva_pro_db__${bizId}`; }
+
+function emptyDB() {
   return {
     orders: [],
     team: ["Self"],
-    categories: ["Model", "Print", "Color", "Material", "Other"],
+    categories: ["Model", "Print", "Color", "Material", "Other"]
   };
 }
 
-function loadDB(bizId) {
-  try {
-    const raw = localStorage.getItem(DB_KEY(bizId));
-    if (!raw) return newEmptyDB();
-    const db = JSON.parse(raw);
-    db.orders ||= [];
-    db.team ||= ["Self"];
-    db.categories ||= ["Model", "Print", "Color", "Material", "Other"];
-    return db;
-  } catch (e) {
-    return newEmptyDB();
+window.getActiveDriveBackupFileName = function () {
+  const meta = loadBizMeta();
+  const biz = meta.businesses.find(b => b.id === meta.activeBizId);
+  const safeName = (biz?.name || "Business").replace(/[^a-z0-9]/gi, "_");
+  return `TatvaPro_${safeName}_Backup.json`;
+};
+
+function getVisibleBusinesses() {
+  const meta = loadBizMeta();
+  const email = getLoggedEmail();
+  if (!email) return []; // ✅ locked
+  return meta.businesses.filter(b => (b.ownerEmail || "").toLowerCase().trim() === email);
+}
+
+function ensureActiveBizVisible() {
+  const meta = loadBizMeta();
+  const visible = getVisibleBusinesses();
+  if (visible.length === 0) return;
+
+  const ok = visible.some(b => b.id === meta.activeBizId);
+  if (!ok) {
+    meta.activeBizId = visible[0].id;
+    saveBizMeta(meta);
   }
 }
 
+function getActiveBizId() { return loadBizMeta().activeBizId; }
+
+window.renderBizDropdown = function () {
+  ensureActiveBizVisible();
+  const meta = loadBizMeta();
+  const visible = getVisibleBusinesses();
+  const sel = document.getElementById("bizSelect");
+  if (!sel) return;
+  sel.innerHTML = "";
+
+  if (!getLoggedEmail()) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.text = "🔐 Login required";
+    sel.add(opt);
+    sel.value = "";
+    return;
+  }
+
+  if (visible.length === 0) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.text = "❌ No business for this email";
+    sel.add(opt);
+    sel.value = "";
+    return;
+  }
+
+  visible.forEach(b => {
+    const opt = document.createElement("option");
+    opt.value = b.id;
+    opt.text = "🧳 " + b.name;
+    sel.add(opt);
+  });
+
+  const activeInVisible = visible.some(b => b.id === meta.activeBizId);
+  sel.value = activeInVisible ? meta.activeBizId : (visible[0].id);
+};
+
+window.switchBusinessFromUI = function () {
+  const sel = document.getElementById("bizSelect");
+  if (!sel || !sel.value) return;
+  const meta = loadBizMeta();
+  meta.activeBizId = sel.value;
+  saveBizMeta(meta);
+
+  loadDBForActiveBusiness();
+  renderHome();
+};
+
+// DB
+window.db = emptyDB();
+window.currentId = null;
+window.__isRestoring = false;
+
+if (!localStorage.getItem("LOCAL_LAST_TS")) localStorage.setItem("LOCAL_LAST_TS", "0");
+
+window.loadDBForActiveBusiness = function () {
+  if (!getLoggedEmail()) return;
+
+  ensureActiveBizVisible();
+  window.renderBizDropdown();
+
+  const bizId = getActiveBizId();
+  const key = getDBKey(bizId);
+  const stored = JSON.parse(localStorage.getItem(key) || "null");
+
+  db = stored || emptyDB();
+  db.orders ||= [];
+  db.team ||= ["Self"];
+  db.categories ||= ["Model", "Print", "Color", "Material", "Other"];
+};
+
 function saveDB() {
+  if (!getLoggedEmail()) return;
+
+  const bizId = getActiveBizId();
+  const key = getDBKey(bizId);
+
+  localStorage.setItem(key, JSON.stringify(db));
+  localStorage.setItem("LOCAL_LAST_TS", String(Date.now()));
+
+  renderHome();
+  if (currentId) renderDetail();
+
   try {
-    if (!ACTIVE_BIZ_ID) return;
-    localStorage.setItem(DB_KEY(ACTIVE_BIZ_ID), JSON.stringify(db));
+    if (!window.__isRestoring && window.scheduleAutoBackup) {
+      window.scheduleAutoBackup();
+    }
   } catch (e) {}
 }
 
-let db = newEmptyDB();
+window.closeModal = function (id) { document.getElementById(id).style.display = "none"; };
+function money(n) { return "₹" + Number(n || 0); }
 
-/* -------------------------------
-   DRIVE AUTH HOOKS
---------------------------------*/
-// gdrive.js will set window.__driveUserEmail
-function getLoggedEmail() {
-  // prefer drive email
-  if (window.__driveUserEmail) return window.__driveUserEmail;
-  // fallback
-  return ACTIVE_EMAIL || "";
+// ADMIN UI
+function updateAdminUI() {
+  const btn = document.getElementById("btnBiz");
+  if (btn) btn.style.display = isAdmin() ? "inline-flex" : "none";
 }
 
-/* -------------------------------
-   1 EMAIL = 1 BUSINESS RULE
---------------------------------*/
-function ensureOneBusinessForEmail(email) {
-  const meta = loadBizMeta();
-  meta.businesses ||= [];
+// LOCK UI
+function lockAppUI(locked) {
+  const lock = document.getElementById("loginLock");
+  const app = document.getElementById("mainApp");
+  const fab = document.getElementById("fabBtn");
 
-  // keep only businesses for this email (visible list)
-  const mine = meta.businesses.filter((b) => b.ownerEmail === email);
-
-  // if not exists => auto create
-  if (mine.length === 0) {
-    const id = nowId("biz");
-    meta.businesses.push({
-      id,
-      name: "Main Business",
-      ownerEmail: email,
-    });
-    meta.activeBizId = id;
-    saveBizMeta(meta);
-    return id;
+  if (locked) {
+    if (lock) { lock.style.display = "flex"; lock.style.alignItems="center"; lock.style.justifyContent="center"; }
+    if (app) app.style.display = "none";
+    if (fab) fab.style.display = "none";
+  } else {
+    if (lock) lock.style.display = "none";
+    if (app) app.style.display = "block";
+    if (fab) fab.style.display = "flex";
   }
-
-  // if exists => set active (first or previously active)
-  if (meta.activeBizId && mine.find((b) => b.id === meta.activeBizId)) {
-    saveBizMeta(meta);
-    return meta.activeBizId;
-  }
-  meta.activeBizId = mine[0].id;
-  saveBizMeta(meta);
-  return meta.activeBizId;
 }
 
-/* -------------------------------
-   UI SHOW/HIDE (LOGIN LOCK)
---------------------------------*/
-function showLoginLock(show) {
-  const lock = $("loginLock");
-  const main = $("mainApp");
-  const fab = $("fabBtn");
-
-  if (lock) lock.style.display = show ? "flex" : "none";
-  if (main) main.style.display = show ? "none" : "block";
-  if (fab) fab.style.display = show ? "none" : "flex";
-}
-
-/* -------------------------------
-   BUSINESS SWITCH
---------------------------------*/
-function renderBizDropdown() {
-  const sel = $("bizSelect");
-  if (!sel) return;
-
-  const meta = loadBizMeta();
-  const list = meta.businesses.filter((b) => b.ownerEmail === ACTIVE_EMAIL);
-
-  sel.innerHTML = "";
-
-  list.forEach((b) => {
-    const opt = document.createElement("option");
-    opt.value = b.id;
-    opt.textContent = b.name;
-    sel.appendChild(opt);
-  });
-
-  // active
-  if (ACTIVE_BIZ_ID) sel.value = ACTIVE_BIZ_ID;
-
-  // admin button only admin email
-  const btnBiz = $("btnBiz");
-  if (btnBiz) btnBiz.style.display = ACTIVE_EMAIL === ADMIN_EMAIL ? "inline-flex" : "none";
-}
-
-window.switchBusinessFromUI = function () {
-  const sel = $("bizSelect");
-  if (!sel) return;
-  const newId = sel.value;
-
-  const meta = loadBizMeta();
-  meta.activeBizId = newId;
-  saveBizMeta(meta);
-
-  ACTIVE_BIZ_ID = newId;
-  db = loadDB(ACTIVE_BIZ_ID);
-
-  renderHome();
-};
-
-/* -------------------------------
-   STATS + HOME
---------------------------------*/
-function calcOrderSummary(order) {
-  const price = Number(order.price || 0);
-  const income = (order.income || []).reduce((a, x) => a + Number(x.amount || 0), 0);
-  const expense = (order.tasks || []).reduce((a, x) => a + Number(x.cost || 0), 0);
-  const pending = Math.max(0, price - income);
-  const profit = income - expense;
-  return { price, income, expense, pending, profit };
-}
-
-function computeTotals() {
-  let orders = db.orders.length;
-  let totalIncome = 0;
-  let totalExpense = 0;
-  let revenue = 0;
-
-  db.orders.forEach((o) => {
-    const s = calcOrderSummary(o);
-    totalIncome += s.income;
-    totalExpense += s.expense;
-    revenue += s.price;
-  });
-
-  const profit = totalIncome - totalExpense;
-  const cashHand = totalIncome - totalExpense;
-
-  return { orders, profit, revenue, cashHand };
-}
-
-function renderStats() {
-  const t = computeTotals();
-
-  if ($("st-orders")) $("st-orders").innerText = t.orders;
-  if ($("st-profit")) $("st-profit").innerText = money(t.profit);
-  if ($("st-rev")) $("st-rev").innerText = money(t.revenue);
-  if ($("st-hand")) $("st-hand").innerText = money(t.cashHand);
-}
-
-function renderRecentOrders() {
-  const box = $("orders-list");
-  if (!box) return;
-
-  const recent = [...db.orders].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 10);
-
-  if (recent.length === 0) {
-    box.innerHTML = `<div style="padding:14px;color:#888;">No Orders Yet</div>`;
-    return;
-  }
-
-  box.innerHTML = "";
-  recent.forEach((o) => {
-    const s = calcOrderSummary(o);
-
-    const div = document.createElement("div");
-    div.className = "order-card";
-    div.style.cursor = "pointer";
-    div.onclick = () => openOrderDetail(o.id);
-
-    div.innerHTML = `
-      <div class="order-left">
-        <b>${o.client || "-"}</b>
-        <div style="font-size:12px;color:#666;">${o.work || "-"}</div>
-        <div style="font-size:12px;color:#999;">${o.date || ""}</div>
-      </div>
-      <div class="order-right">
-        <div style="font-size:12px;color:#666;">Exp: ${money(s.expense)}</div>
-        <div style="font-weight:900;color:#ff7a00;">${money(s.price)}</div>
-        <div class="pill">${money(s.pending)} Left</div>
-      </div>
-    `;
-    box.appendChild(div);
-  });
-}
-
-function renderHome() {
+window.onDriveLoginSuccess = function () {
+  lockAppUI(false);
+  updateAdminUI();
+  loadDBForActiveBusiness();
   renderBizDropdown();
-  renderStats();
-  renderRecentOrders();
-  saveDB(); // safe save
-}
-
-/* -------------------------------
-   MODALS
---------------------------------*/
-window.openNewOrder = function () {
-  if (!$("modal-new")) return;
-  $("new-client").value = "";
-  $("new-work").value = "";
-  $("new-price").value = "";
-  $("new-date").value = toDateStr(new Date());
-  $("modal-new").style.display = "flex";
-};
-
-window.closeModal = function (id) {
-  const m = $(id);
-  if (m) m.style.display = "none";
-};
-
-/* -------------------------------
-   CREATE ORDER
---------------------------------*/
-window.createOrder = function () {
-  const client = safeText($("new-client")?.value);
-  const work = safeText($("new-work")?.value);
-  const price = Number($("new-price")?.value || 0);
-  const date = $("new-date")?.value || toDateStr(new Date());
-
-  if (!client) return alert("Client name required");
-
-  const o = {
-    id: nowId("ord"),
-    client,
-    work,
-    price,
-    date,
-    createdAt: Date.now(),
-    income: [],
-    tasks: [],
-  };
-
-  db.orders.push(o);
-  saveDB();
   renderHome();
-  window.closeModal("modal-new");
-
-  // auto drive backup if available
-  if (window.scheduleAutoBackup) window.scheduleAutoBackup();
 };
 
-/* -------------------------------
-   ORDER DETAIL
---------------------------------*/
-function fillOrderSelect() {
-  const sel = $("orderSelect");
-  if (!sel) return;
+// HOME
+function renderHome() {
+  if (!getLoggedEmail()) return;
 
-  sel.innerHTML = "";
-  db.orders.forEach((o) => {
-    const opt = document.createElement("option");
-    opt.value = o.id;
-    opt.textContent = `${o.client} (${o.date})`;
-    sel.appendChild(opt);
+  let totalRev = 0, totalExp = 0, totalRecd = 0, totalPaid = 0;
+  let html = "";
+
+  let sorted = [...db.orders].sort((a, b) => b.id - a.id);
+  sorted.forEach(o => {
+    let recd = (o.income || []).reduce((s, x) => s + x.amt, 0);
+    let exp = (o.tasks || []).reduce((s, t) => s + t.cost, 0);
+    let paid = (o.tasks || []).reduce((s, t) => s + (t.payouts || []).reduce((p, x) => p + x.amt, 0), 0);
+
+    totalRev += o.price;
+    totalExp += exp;
+    totalRecd += recd;
+    totalPaid += paid;
+
+    let pending = o.price - recd;
+    let statusText = pending <= 0 ? "✔ Paid" : `⏳ ₹${pending} Left`;
+
+    html += `
+      <div class="order-card" onclick="openDetail(${o.id})">
+        <div class="oc-top">
+          <span>${o.client}</span>
+          <span style="color:${pending <= 0 ? "green" : "orange"}">₹${o.price}</span>
+        </div>
+        <div class="oc-mid">
+          <span>${o.work || ""}</span>
+          <span>Exp: ₹${exp}</span>
+        </div>
+        <div class="oc-bot">
+          <span>${o.date || ""}</span>
+          <span class="status-badge ${pending <= 0 ? "status-green" : "status-orange"}">${statusText}</span>
+        </div>
+      </div>`;
   });
 
-  if (ACTIVE_ORDER_ID) sel.value = ACTIVE_ORDER_ID;
+  document.getElementById("orders-list").innerHTML =
+    html || '<div style="text-align:center;color:#aaa;margin-top:20px;">No Orders Yet</div>';
+
+  document.getElementById("st-orders").innerText = db.orders.length;
+  document.getElementById("st-profit").innerText = money(totalRev - totalExp);
+  document.getElementById("st-rev").innerText = money(totalRev);
+  document.getElementById("st-hand").innerText = money(totalRecd - totalPaid);
+}
+
+// New order
+window.openNewOrder = function () {
+  if (!getLoggedEmail()) return alert("Drive Login first!");
+  document.getElementById("new-client").value = "";
+  document.getElementById("new-work").value = "";
+  document.getElementById("new-price").value = "";
+  document.getElementById("new-date").valueAsDate = new Date();
+  document.getElementById("modal-new").style.display = "flex";
+};
+
+window.createOrder = function () {
+  let client = document.getElementById("new-client").value.trim();
+  let price = Number(document.getElementById("new-price").value);
+  if (!client || !price) return alert("Client Name & Price Required");
+
+  db.orders.push({
+    id: Date.now(),
+    client,
+    work: document.getElementById("new-work").value.trim(),
+    price,
+    date: (document.getElementById("new-date").value || "").split("-").reverse().join("/"),
+    income: [],
+    tasks: []
+  });
+
+  saveDB();
+  closeModal("modal-new");
+};
+
+// DETAIL
+window.openDetail = function (id) {
+  currentId = id;
+  fillOrderDropdown();
+  document.getElementById("orderSelect").value = String(id);
+  fillTeamDropdown();
+  fillCategoryDropdown();
+
+  renderDetail();
+  switchTab("income");
+  document.getElementById("modal-detail").style.display = "flex";
+};
+
+function fillOrderDropdown() {
+  const sel = document.getElementById("orderSelect");
+  sel.innerHTML = "";
+  let sorted = [...db.orders].sort((a, b) => b.id - a.id);
+  sorted.forEach(o => {
+    const opt = document.createElement("option");
+    opt.value = String(o.id);
+    opt.text = `${o.client} - ₹${o.price}`;
+    sel.add(opt);
+  });
 }
 
 window.onOrderSelectChange = function () {
-  const sel = $("orderSelect");
-  if (!sel) return;
-  openOrderDetail(sel.value);
+  const id = Number(document.getElementById("orderSelect").value);
+  currentId = id;
+  fillTeamDropdown();
+  fillCategoryDropdown();
+  renderDetail();
 };
 
-function openOrderDetail(orderId) {
-  const o = db.orders.find((x) => x.id === orderId);
-  if (!o) return;
+function fillTeamDropdown() {
+  let selA = document.getElementById("task-artist");
+  selA.innerHTML = "";
+  db.team.forEach(t => {
+    let opt = document.createElement("option");
+    opt.value = t;
+    opt.text = t;
+    selA.add(opt);
+  });
+}
 
-  ACTIVE_ORDER_ID = orderId;
-
-  fillOrderSelect();
-  $("d-client").innerText = o.client || "-";
-  $("d-work").innerText = o.work || "-";
-  $("d-date").innerText = o.date || "-";
-
-  const s = calcOrderSummary(o);
-  $("d-recd").innerText = money(s.income);
-  $("d-paid").innerText = money(s.expense);
-  $("d-hand").innerText = money(s.income - s.expense);
-
-  $("d-pending").innerText = s.pending > 0 ? `${money(s.pending)} Pending` : "✅ Completed";
-
-  renderIncomeList(o);
-  renderTaskList(o);
-  renderHistory(o);
-
-  $("modal-detail").style.display = "flex";
-  switchTab("income");
+function fillCategoryDropdown() {
+  let sel = document.getElementById("task-type");
+  sel.innerHTML = "";
+  (db.categories || []).forEach(c => {
+    let opt = document.createElement("option");
+    opt.value = c;
+    opt.text = c;
+    sel.add(opt);
+  });
+  if (!db.categories || db.categories.length === 0) {
+    db.categories = ["Other"];
+    saveDB();
+  }
 }
 
 window.switchTab = function (tab) {
-  const a = $("tab-income");
-  const b = $("tab-expense");
-  const c = $("tab-summary");
-  if (!a || !b || !c) return;
-
-  a.style.display = tab === "income" ? "block" : "none";
-  b.style.display = tab === "expense" ? "block" : "none";
-  c.style.display = tab === "summary" ? "block" : "none";
+  document.getElementById("tab-income").style.display = tab === "income" ? "block" : "none";
+  document.getElementById("tab-expense").style.display = tab === "expense" ? "block" : "none";
+  document.getElementById("tab-summary").style.display = tab === "summary" ? "block" : "none";
 };
 
-function renderIncomeList(order) {
-  const box = $("list-income");
-  if (!box) return;
+function renderDetail() {
+  let o = db.orders.find(x => x.id === currentId);
+  if (!o) return closeModal("modal-detail");
 
-  order.income ||= [];
-  box.innerHTML = "";
+  document.getElementById("d-client").innerText = o.client;
+  document.getElementById("d-work").innerText = o.work || "-";
+  document.getElementById("d-date").innerText = o.date || "-";
 
-  if (order.income.length === 0) {
-    box.innerHTML = `<div style="padding:8px;color:#888;">No income entries</div>`;
-    return;
-  }
+  let recd = (o.income || []).reduce((s, x) => s + x.amt, 0);
+  let pending = o.price - recd;
+  document.getElementById("d-pending").innerText = pending <= 0 ? "Full Paid" : `Pending: ₹${pending}`;
 
-  order.income
-    .slice()
-    .sort((a, b) => (b.time || 0) - (a.time || 0))
-    .forEach((x) => {
-      const div = document.createElement("div");
-      div.className = "mini-row";
-      div.innerHTML = `
-        <div>${x.date || ""}</div>
-        <b>${money(x.amount)}</b>
-        <button class="btn btn-sm" style="margin-left:auto;" data-id="${x.id}">🗑</button>
-      `;
+  let incHtml = "";
+  (o.income || []).forEach((inc, idx) => {
+    incHtml += `<div class="list-item"><span>${inc.date}</span><b>+ ₹${inc.amt}</b>
+      <span class="del-x" onclick="delInc(${idx})">×</span></div>`;
+  });
+  document.getElementById("list-income").innerHTML = incHtml;
 
-      div.querySelector("button").onclick = () => {
-        order.income = order.income.filter((z) => z.id !== x.id);
-        saveDB();
-        openOrderDetail(order.id);
-        if (window.scheduleAutoBackup) window.scheduleAutoBackup();
-      };
+  let expHtml = "";
+  let totalPaidOut = 0;
 
-      box.appendChild(div);
+  (o.tasks || []).forEach((t, tIdx) => {
+    let paid = (t.payouts || []).reduce((s, x) => s + x.amt, 0);
+    totalPaidOut += paid;
+    let due = t.cost - paid;
+
+    let payHist = "";
+    (t.payouts || []).forEach((p, pIdx) => {
+      payHist += `<div class="list-item" style="color:#666;font-size:11px;padding-left:10px;">
+        • ${p.date}: ₹${p.amt} <span class="del-x" onclick="delTaskPay(${tIdx},${pIdx})">×</span></div>`;
     });
+
+    expHtml += `
+      <details style="background:#f9f9f9;border:1px solid #eee;padding:10px;border-radius:12px;margin-bottom:10px;">
+        <summary style="cursor:pointer;font-weight:800;">
+          ${t.type} (${t.artist}) — Cost ₹${t.cost} — <span style="color:${due <= 0 ? "green" : "red"}">${due <= 0 ? "Paid" : "Due ₹" + due}</span>
+          <span class="del-x" onclick="event.preventDefault();delTask(${tIdx})" style="color:red;float:right;">×</span>
+        </summary>
+        <div style="margin-top:8px;">
+          ${payHist}
+          <div class="row-inputs" style="margin-top:8px;">
+            <input type="date" id="t-date-${tIdx}" style="margin:0;padding:6px;font-size:13px;">
+            <input type="number" id="t-pay-${tIdx}" placeholder="Amt" style="margin:0;padding:6px;font-size:13px;">
+            <button class="btn btn-blue btn-sm" onclick="payTask(${tIdx})">Pay</button>
+          </div>
+        </div>
+      </details>`;
+  });
+
+  document.getElementById("list-tasks").innerHTML = expHtml;
+
+  document.getElementById("d-recd").innerText = money(recd);
+  document.getElementById("d-paid").innerText = money(totalPaidOut);
+  document.getElementById("d-hand").innerText = money(recd - totalPaidOut);
+
+  document.getElementById("hist-income").innerHTML = incHtml || "<div style='color:#999;'>No income history</div>";
+  document.getElementById("hist-expense").innerHTML = expHtml || "<div style='color:#999;'>No expense history</div>";
 }
 
-function renderTaskList(order) {
-  const box = $("list-tasks");
-  if (!box) return;
-
-  order.tasks ||= [];
-  box.innerHTML = "";
-
-  if (order.tasks.length === 0) {
-    box.innerHTML = `<div style="padding:8px;color:#888;">No expenses/tasks</div>`;
-    return;
-  }
-
-  order.tasks
-    .slice()
-    .sort((a, b) => (b.time || 0) - (a.time || 0))
-    .forEach((x) => {
-      const div = document.createElement("div");
-      div.className = "mini-row";
-      div.innerHTML = `
-        <div>${x.type || ""} • ${x.artist || ""}</div>
-        <b>${money(x.cost)}</b>
-        <button class="btn btn-sm" style="margin-left:auto;" data-id="${x.id}">🗑</button>
-      `;
-
-      div.querySelector("button").onclick = () => {
-        order.tasks = order.tasks.filter((z) => z.id !== x.id);
-        saveDB();
-        openOrderDetail(order.id);
-        if (window.scheduleAutoBackup) window.scheduleAutoBackup();
-      };
-
-      box.appendChild(div);
-    });
-}
-
-function renderHistory(order) {
-  const hi = $("hist-income");
-  const he = $("hist-expense");
-  if (!hi || !he) return;
-
-  order.income ||= [];
-  order.tasks ||= [];
-
-  hi.innerHTML = order.income
-    .slice()
-    .sort((a, b) => (b.time || 0) - (a.time || 0))
-    .map((x) => `<div style="padding:6px 0;border-bottom:1px solid #eee;">${x.date} - <b>${money(x.amount)}</b></div>`)
-    .join("") || `<div style="color:#888;padding:8px;">No income history</div>`;
-
-  he.innerHTML = order.tasks
-    .slice()
-    .sort((a, b) => (b.time || 0) - (a.time || 0))
-    .map((x) => `<div style="padding:6px 0;border-bottom:1px solid #eee;">${x.type} (${x.artist}) - <b>${money(x.cost)}</b></div>`)
-    .join("") || `<div style="color:#888;padding:8px;">No expense history</div>`;
-}
-
-/* -------------------------------
-   ADD INCOME / TASK
---------------------------------*/
+// Income
 window.addIncome = function () {
-  const order = db.orders.find((x) => x.id === ACTIVE_ORDER_ID);
-  if (!order) return;
+  let amt = Number(document.getElementById("pay-in-amt").value);
+  if (!amt) return;
 
-  const date = $("pay-in-date").value || toDateStr(new Date());
-  const amt = Number($("pay-in-amt").value || 0);
-  if (!amt) return alert("Amount required");
+  let dateEl = document.getElementById("pay-in-date");
+  let dt = (dateEl && dateEl.value)
+    ? dateEl.value.split("-").reverse().join("/")
+    : new Date().toLocaleDateString("en-GB");
 
-  order.income ||= [];
-  order.income.push({ id: nowId("inc"), date, amount: amt, time: Date.now() });
+  let o = db.orders.find(x => x.id === currentId);
+  (o.income ||= []).push({ amt, date: dt });
 
-  $("pay-in-amt").value = "";
-
+  document.getElementById("pay-in-amt").value = "";
+  if (dateEl) dateEl.value = "";
   saveDB();
-  openOrderDetail(order.id);
-  if (window.scheduleAutoBackup) window.scheduleAutoBackup();
 };
 
-function fillTaskDropdowns() {
-  const typeSel = $("task-type");
-  const artSel = $("task-artist");
-  if (!typeSel || !artSel) return;
+window.delInc = function (idx) {
+  if (!confirm("Delete entry?")) return;
+  let o = db.orders.find(x => x.id === currentId);
+  o.income.splice(idx, 1);
+  saveDB();
+};
 
-  // categories
-  typeSel.innerHTML = "";
-  db.categories.forEach((c) => {
-    const opt = document.createElement("option");
-    opt.value = c;
-    opt.textContent = c;
-    typeSel.appendChild(opt);
-  });
-
-  // team
-  artSel.innerHTML = "";
-  db.team.forEach((m) => {
-    const opt = document.createElement("option");
-    opt.value = m;
-    opt.textContent = m;
-    artSel.appendChild(opt);
-  });
-}
-
+// Tasks
 window.addTask = function () {
-  const order = db.orders.find((x) => x.id === ACTIVE_ORDER_ID);
-  if (!order) return;
+  let type = document.getElementById("task-type").value;
+  let artist = document.getElementById("task-artist").value;
+  let cost = Number(document.getElementById("task-cost").value);
+  if (!cost) return alert("Enter Cost");
 
-  const type = $("task-type").value || "";
-  const artist = $("task-artist").value || "";
-  const cost = Number($("task-cost").value || 0);
-  if (!cost) return alert("Cost required");
+  let o = db.orders.find(x => x.id === currentId);
+  (o.tasks ||= []).push({ type, artist, cost, payouts: [] });
 
-  order.tasks ||= [];
-  order.tasks.push({
-    id: nowId("tsk"),
-    type,
-    artist,
-    cost,
-    time: Date.now(),
-  });
-
-  $("task-cost").value = "";
-
+  document.getElementById("task-cost").value = "";
   saveDB();
-  openOrderDetail(order.id);
-  if (window.scheduleAutoBackup) window.scheduleAutoBackup();
 };
 
-/* -------------------------------
-   AUTO SETTLE (mark done)
---------------------------------*/
+window.payTask = function (tIdx) {
+  let amt = Number(document.getElementById(`t-pay-${tIdx}`).value);
+  if (!amt) return;
+
+  let dateEl = document.getElementById(`t-date-${tIdx}`);
+  let dt = (dateEl && dateEl.value)
+    ? dateEl.value.split("-").reverse().join("/")
+    : new Date().toLocaleDateString("en-GB");
+
+  let o = db.orders.find(x => x.id === currentId);
+  o.tasks[tIdx].payouts.push({ amt, date: dt });
+
+  document.getElementById(`t-pay-${tIdx}`).value = "";
+  if (dateEl) dateEl.value = "";
+  saveDB();
+};
+
+window.delTask = function (tIdx) {
+  if (!confirm("Delete Task?")) return;
+  let o = db.orders.find(x => x.id === currentId);
+  o.tasks.splice(tIdx, 1);
+  saveDB();
+};
+
+window.delTaskPay = function (tIdx, pIdx) {
+  if (!confirm("Delete Payment?")) return;
+  let o = db.orders.find(x => x.id === currentId);
+  o.tasks[tIdx].payouts.splice(pIdx, 1);
+  saveDB();
+};
+
+// Auto settle / Delete order
 window.markDone = function () {
-  const order = db.orders.find((x) => x.id === ACTIVE_ORDER_ID);
-  if (!order) return;
+  if (!confirm("Auto-Settle Everything?")) return;
+  let o = db.orders.find(x => x.id === currentId);
+  let today = new Date().toLocaleDateString("en-GB") + " (Auto)";
 
-  const s = calcOrderSummary(order);
-  if (s.pending <= 0) return alert("Already settled");
+  let recd = (o.income || []).reduce((s, x) => s + x.amt, 0);
+  if (o.price > recd) {
+    (o.income ||= []).push({ amt: o.price - recd, date: today });
+  }
 
-  order.income ||= [];
-  order.income.push({
-    id: nowId("inc"),
-    date: toDateStr(new Date()),
-    amount: s.pending,
-    time: Date.now(),
+  (o.tasks || []).forEach(t => {
+    let paid = (t.payouts || []).reduce((s, x) => s + x.amt, 0);
+    if (t.cost > paid) {
+      (t.payouts ||= []).push({ amt: t.cost - paid, date: today });
+    }
   });
 
   saveDB();
-  openOrderDetail(order.id);
-  if (window.scheduleAutoBackup) window.scheduleAutoBackup();
 };
 
-/* -------------------------------
-   DELETE ORDER
---------------------------------*/
 window.deleteOrder = function () {
-  if (!ACTIVE_ORDER_ID) return;
-  if (!confirm("Delete this order?")) return;
-
-  db.orders = db.orders.filter((x) => x.id !== ACTIVE_ORDER_ID);
-  ACTIVE_ORDER_ID = "";
-
+  if (!confirm("Delete entire order?")) return;
+  db.orders = db.orders.filter(x => x.id !== currentId);
+  currentId = db.orders.length ? db.orders[0].id : null;
   saveDB();
-  renderHome();
-  window.closeModal("modal-detail");
-  if (window.scheduleAutoBackup) window.scheduleAutoBackup();
+  closeModal("modal-detail");
 };
 
-/* -------------------------------
-   TEAM MANAGER
---------------------------------*/
+// Team
 window.openTeamMgr = function () {
-  $("overlay-team").style.display = "flex";
-  renderTeamList();
-};
-
-function renderTeamList() {
-  const box = $("list-team");
-  if (!box) return;
-  box.innerHTML = "";
-
-  db.team ||= ["Self"];
-  db.team.forEach((m) => {
-    const div = document.createElement("div");
-    div.className = "mini-row";
-    div.innerHTML = `
-      <div>${m}</div>
-      <button class="btn btn-sm" style="margin-left:auto;">🗑</button>
-    `;
-    div.querySelector("button").onclick = () => {
-      if (m === "Self") return alert("Cannot delete Self");
-      db.team = db.team.filter((x) => x !== m);
-      saveDB();
-      renderTeamList();
-      fillTaskDropdowns();
-      if (window.scheduleAutoBackup) window.scheduleAutoBackup();
-    };
-    box.appendChild(div);
+  if (!getLoggedEmail()) return;
+  let html = "";
+  db.team.forEach((t, i) => {
+    if (t !== "Self") {
+      html += `<div class="list-item"><span>${t}</span>
+        <span class="del-x" onclick="delTeam(${i})">×</span></div>`;
+    }
   });
-
-  fillTaskDropdowns();
-}
-
+  document.getElementById("list-team").innerHTML = html;
+  document.getElementById("overlay-team").style.display = "flex";
+};
 window.addTeam = function () {
-  const name = safeText($("team-new").value);
-  if (!name) return;
-
-  db.team ||= ["Self"];
-  if (db.team.includes(name)) return alert("Already exists");
-
-  db.team.push(name);
-  $("team-new").value = "";
-
+  let nm = document.getElementById("team-new").value.trim();
+  if (nm && !db.team.includes(nm)) {
+    db.team.push(nm);
+    document.getElementById("team-new").value = "";
+    saveDB();
+    openTeamMgr();
+  }
+};
+window.delTeam = function (i) {
+  db.team.splice(i, 1);
   saveDB();
-  renderTeamList();
-  fillTaskDropdowns();
-  if (window.scheduleAutoBackup) window.scheduleAutoBackup();
+  openTeamMgr();
 };
 
-/* -------------------------------
-   CATEGORY MANAGER
---------------------------------*/
+// Category
 window.openCategoryMgr = function () {
-  $("overlay-cat").style.display = "flex";
-  renderCatList();
-};
-
-function renderCatList() {
-  const box = $("list-cat");
-  if (!box) return;
-  box.innerHTML = "";
-
-  db.categories ||= ["Model", "Print", "Color", "Material", "Other"];
-  db.categories.forEach((c) => {
-    const div = document.createElement("div");
-    div.className = "mini-row";
-    div.innerHTML = `
-      <div>${c}</div>
-      <button class="btn btn-sm" style="margin-left:auto;">🗑</button>
-    `;
-    div.querySelector("button").onclick = () => {
-      db.categories = db.categories.filter((x) => x !== c);
-      saveDB();
-      renderCatList();
-      fillTaskDropdowns();
-      if (window.scheduleAutoBackup) window.scheduleAutoBackup();
-    };
-    box.appendChild(div);
+  if (!getLoggedEmail()) return;
+  let html = "";
+  (db.categories || []).forEach((c, i) => {
+    html += `<div class="list-item"><span>${c}</span>
+      <span class="del-x" onclick="delCategory(${i})">×</span></div>`;
   });
-
-  fillTaskDropdowns();
-}
-
+  document.getElementById("list-cat").innerHTML = html;
+  document.getElementById("overlay-cat").style.display = "flex";
+};
 window.addCategory = function () {
-  const name = safeText($("cat-new").value);
-  if (!name) return;
-
+  let nm = document.getElementById("cat-new").value.trim();
+  if (!nm) return;
   db.categories ||= [];
-  if (db.categories.includes(name)) return alert("Already exists");
-
-  db.categories.push(name);
-  $("cat-new").value = "";
-
+  if (!db.categories.includes(nm)) {
+    db.categories.push(nm);
+    document.getElementById("cat-new").value = "";
+    saveDB();
+    openCategoryMgr();
+    fillCategoryDropdown();
+  }
+};
+window.delCategory = function (i) {
+  if (!confirm("Remove category?")) return;
+  db.categories.splice(i, 1);
+  if (db.categories.length === 0) db.categories.push("Other");
   saveDB();
-  renderCatList();
-  fillTaskDropdowns();
-  if (window.scheduleAutoBackup) window.scheduleAutoBackup();
+  openCategoryMgr();
+  fillCategoryDropdown();
 };
 
-/* -------------------------------
-   BUSINESS MANAGER (ADMIN)
---------------------------------*/
+// Local backup (business wise filename)
+window.backupData = function () {
+  if (!getLoggedEmail()) return alert("Drive Login first!");
+
+  const meta = loadBizMeta();
+  const biz = meta.businesses.find(b => b.id === meta.activeBizId);
+  const safeName = (biz?.name || "Business").replace(/[^a-z0-9]/gi, "_");
+  const fileName = `TatvaPro_${safeName}.json`;
+
+  let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
+  let node = document.createElement("a");
+  node.setAttribute("href", dataStr);
+  node.setAttribute("download", fileName);
+  document.body.appendChild(node);
+  node.click();
+  node.remove();
+};
+
+window.restoreData = function (input) {
+  if (!getLoggedEmail()) return alert("Drive Login first!");
+  let file = input.files[0];
+  let reader = new FileReader();
+  reader.onload = function (e) {
+    db = JSON.parse(e.target.result);
+    db.orders ||= [];
+    db.team ||= ["Self"];
+    db.categories ||= ["Model", "Print", "Color", "Material", "Other"];
+    saveDB();
+    alert("Data Restored!");
+  };
+  reader.readAsText(file);
+};
+
+// ---------- BUSINESS MANAGER (ADMIN PIN) ----------
+let __bizAdminUnlocked = false;
+
 window.openBusinessMgr = function () {
-  $("overlay-biz").style.display = "flex";
-  $("biz-panel").style.display = "none";
-  $("biz-pin").value = "";
-  $("biz-info").innerText = `Admin Email: ${ADMIN_EMAIL}`;
+  if (!isAdmin()) {
+    alert("❌ Only Admin can manage businesses.");
+    return;
+  }
+
+  document.getElementById("overlay-biz").style.display = "flex";
+  document.getElementById("biz-info").innerText =
+    `Logged in: ${getLoggedEmail()} (Admin)`;
+
+  document.getElementById("biz-panel").style.display = "none";
+  document.getElementById("biz-pin").value = "";
+  __bizAdminUnlocked = false;
 };
 
 window.unlockBizAdmin = function () {
-  if (ACTIVE_EMAIL !== ADMIN_EMAIL) return alert("Not admin email");
-  const pin = $("biz-pin").value || "";
-  if (pin !== ADMIN_PIN) return alert("Wrong PIN");
-
-  $("biz-panel").style.display = "block";
-  renderBizList();
+  const pin = document.getElementById("biz-pin").value.trim();
+  if (pin !== ADMIN_PIN) {
+    alert("❌ Wrong PIN");
+    return;
+  }
+  __bizAdminUnlocked = true;
+  document.getElementById("biz-panel").style.display = "block";
+  renderBizManagerList();
 };
 
-function renderBizList() {
-  const box = $("biz-list");
-  if (!box) return;
-
+function renderBizManagerList() {
   const meta = loadBizMeta();
-  box.innerHTML = "";
+  const list = document.getElementById("biz-list");
+  list.innerHTML = "";
 
-  meta.businesses.forEach((b) => {
-    const div = document.createElement("div");
-    div.className = "mini-row";
-    div.innerHTML = `
-      <div><b>${b.name}</b><div style="font-size:12px;color:#666;">${b.ownerEmail}</div></div>
-    `;
-    box.appendChild(div);
+  meta.businesses.forEach(b => {
+    const active = b.id === meta.activeBizId ? "✅ " : "";
+    list.innerHTML += `
+      <div class="list-item" style="gap:10px;">
+        <span>${active}<b>${b.name}</b><br>
+          <small style="color:#666;">Owner: ${(b.ownerEmail || "-")}</small>
+        </span>
+        <span style="display:flex;gap:6px;align-items:center;">
+          <button class="btn btn-sm" onclick="renameBusiness('${b.id}')">Rename</button>
+          <button class="btn btn-sm" onclick="setActiveBusiness('${b.id}')">Use</button>
+          <button class="btn btn-red btn-sm" onclick="deleteBusiness('${b.id}')">Delete</button>
+        </span>
+      </div>`;
   });
 }
 
 window.addBusiness = function () {
-  if (ACTIVE_EMAIL !== ADMIN_EMAIL) return alert("Admin only");
+  if (!__bizAdminUnlocked) return alert("Unlock with PIN first!");
 
-  const name = safeText($("biz-new-name").value);
-  const owner = safeText($("biz-new-owner").value).toLowerCase();
-  if (!name || !owner) return alert("Name & Owner email required");
+  const nm = document.getElementById("biz-new-name").value.trim();
+  const em = document.getElementById("biz-new-owner").value.trim().toLowerCase();
+
+  if (!nm) return alert("Business name required");
+  if (!em || !em.includes("@")) return alert("Valid owner email required");
 
   const meta = loadBizMeta();
-  meta.businesses ||= [];
+  const id = "biz_" + Date.now();
 
-  meta.businesses.push({ id: nowId("biz"), name, ownerEmail: owner });
+  meta.businesses.push({ id, name: nm, ownerEmail: em });
+  meta.activeBizId = id;
   saveBizMeta(meta);
 
-  $("biz-new-name").value = "";
-  $("biz-new-owner").value = "";
+  localStorage.setItem(getDBKey(id), JSON.stringify(emptyDB()));
 
-  renderBizList();
+  document.getElementById("biz-new-name").value = "";
+  document.getElementById("biz-new-owner").value = "";
+
+  loadDBForActiveBusiness();
+  renderHome();
+  renderBizManagerList();
 };
 
-/* -------------------------------
-   LOCAL BACKUP / RESTORE
---------------------------------*/
-window.collectAppBackupData = function () {
-  // Only active business db
-  return {
-    email: ACTIVE_EMAIL,
-    bizId: ACTIVE_BIZ_ID,
-    db,
-    meta: loadBizMeta(),
-    exportedAt: new Date().toISOString(),
-  };
-};
-
-window.getActiveDriveBackupFileName = function () {
+window.renameBusiness = function (bizId) {
+  if (!__bizAdminUnlocked) return alert("Unlock with PIN first!");
   const meta = loadBizMeta();
-  const biz = meta.businesses.find((b) => b.id === ACTIVE_BIZ_ID);
-  const safe = (biz?.name || "MainBusiness").replace(/[^a-z0-9_\- ]/gi, "_").replace(/\s+/g, "_");
-  return `TatvaPro_${safe}_Backup.json`;
+  const biz = meta.businesses.find(b => b.id === bizId);
+  const nm = prompt("New name:", biz?.name || "");
+  if (!nm) return;
+  biz.name = nm.trim();
+  saveBizMeta(meta);
+
+  renderBizDropdown();
+  renderBizManagerList();
 };
 
-// Local Save button
-window.backupData = function () {
-  const payload = window.collectAppBackupData();
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
+window.setActiveBusiness = function (bizId) {
+  const meta = loadBizMeta();
+  meta.activeBizId = bizId;
+  saveBizMeta(meta);
 
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `Tatva_Local_Backup_${ACTIVE_BIZ_ID}.json`;
-  a.click();
-
-  URL.revokeObjectURL(url);
+  loadDBForActiveBusiness();
+  renderHome();
+  if (__bizAdminUnlocked) renderBizManagerList();
 };
 
-// Local Load input restore (uses old index onchange="restoreData(this)")
-window.restoreData = function (inputEl) {
-  try {
-    const file = inputEl.files[0];
-    if (!file) return;
+window.deleteBusiness = function (bizId) {
+  if (!__bizAdminUnlocked) return alert("Unlock with PIN first!");
+  const meta = loadBizMeta();
+  if (meta.businesses.length <= 1) return alert("At least 1 business must remain.");
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const obj = JSON.parse(reader.result);
+  if (!confirm("Delete this business? All local data will be removed.")) return;
 
-      if (!obj || !obj.db) return alert("Invalid file");
-      window.applyAppRestoreData(obj.db);
+  meta.businesses = meta.businesses.filter(b => b.id !== bizId);
+  localStorage.removeItem(getDBKey(bizId));
 
-      inputEl.value = "";
-    };
-    reader.readAsText(file);
-  } catch (e) {
-    alert("Restore error");
-  }
+  if (meta.activeBizId === bizId) meta.activeBizId = meta.businesses[0].id;
+  saveBizMeta(meta);
+
+  loadDBForActiveBusiness();
+  renderHome();
+  renderBizManagerList();
 };
 
-/* -------------------------------
-   DRIVE RESTORE HANDLER
---------------------------------*/
-window.applyAppRestoreData = function (dataObj) {
-  try {
-    if (!dataObj || typeof dataObj !== "object") return alert("❌ Invalid backup");
+// Drive sync helpers
+window.collectAppBackupData = function () {
+  return { app: "TatvaPro", version: 40, ts: Date.now(), bizId: getActiveBizId(), db: db };
+};
 
-    db = dataObj;
+window.applyBackupObject = function (backup) {
+  if (backup && backup.db) {
+    window.__isRestoring = true;
+
+    db = backup.db;
     db.orders ||= [];
     db.team ||= ["Self"];
     db.categories ||= ["Model", "Print", "Color", "Material", "Other"];
 
-    saveDB();
+    const key = getDBKey(getActiveBizId());
+    localStorage.setItem(key, JSON.stringify(db));
+    localStorage.setItem("LOCAL_LAST_TS", String(backup.ts || Date.now()));
+
     renderHome();
-    fillTaskDropdowns();
+    if (currentId) renderDetail();
 
-    alert("✅ Restore Done!");
-  } catch (e) {
-    console.error(e);
-    alert("❌ Restore failed");
+    setTimeout(() => { window.__isRestoring = false; }, 1200);
   }
 };
 
-/* -------------------------------
-   EXPORT (dummy for button)
---------------------------------*/
-window.exportExcel = function () {
-  alert("Export feature can be added next (Excel).");
-};
+// INIT (lock until login)
+(function init() {
+  updateAdminUI();
+  renderBizDropdown();
 
-/* -------------------------------
-   DRIVE LOGIN SUCCESS HOOK
---------------------------------*/
-window.onDriveLoginSuccess = function () {
-  // email from drive
-  ACTIVE_EMAIL = getLoggedEmail().toLowerCase();
-
-  // enforce 1 email = 1 business
-  ACTIVE_BIZ_ID = ensureOneBusinessForEmail(ACTIVE_EMAIL);
-
-  // load db
-  db = loadDB(ACTIVE_BIZ_ID);
-
-  // unlock UI
-  showLoginLock(false);
-
-  renderHome();
-  fillTaskDropdowns();
-};
-
-/* -------------------------------
-   INIT APP
---------------------------------*/
-function initApp() {
-  // If already connected (gdrive.js restored session) => onDriveLoginSuccess will run from gdrive.js
-  // else show lock
-  showLoginLock(true);
-
-  // update drive status UI if exists
-  if (window.updateDriveStatusUI) window.updateDriveStatusUI();
-
-  // if drive already connected
-  if (window.__driveConnected && window.__driveAccessToken) {
-    setTimeout(() => {
-      if (window.onDriveLoginSuccess) window.onDriveLoginSuccess();
-    }, 200);
+  if (!getLoggedEmail()) {
+    lockAppUI(true);
+  } else {
+    lockAppUI(false);
+    loadDBForActiveBusiness();
+    renderHome();
   }
-}
+})();
 
-window.addEventListener("load", initApp);
+
+// Added for Drive restore
+window.applyAppRestoreData = function(dataObj){
+  try{
+    if(!dataObj || typeof dataObj!=='object'){ alert('❌ Invalid backup'); return; }
+    // If backup wrapper contains db
+    if(dataObj.db) dataObj = dataObj.db;
+    // Replace global db used in app
+    window.db = dataObj;
+    if(typeof saveDB==='function') saveDB();
+    if(typeof renderHome==='function') renderHome();
+    alert('✅ Restore Done');
+  }catch(e){ console.error(e); alert('❌ Restore failed'); }
+};

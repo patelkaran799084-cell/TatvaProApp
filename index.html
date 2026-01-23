@@ -20,20 +20,19 @@
     </div>
 
     <div class="actions" id="topActions">
-      <!-- ✅ Business switch -->
+      <!-- Business switch -->
       <select id="bizSelect" class="btn-top" onchange="switchBusinessFromUI()"></select>
 
-      <!-- ✅ ADMIN only -->
+      <!-- ADMIN only -->
       <button id="btnBiz" class="btn-top" style="display:none;" onclick="openBusinessMgr()">🏢 Business</button>
 
       <button class="btn-top" onclick="openTeamMgr()">👥 Team</button>
       <button class="btn-top" onclick="openCategoryMgr()">🗂 Category</button>
 
-      <!-- ✅ DRIVE -->
+      <!-- DRIVE -->
       <button id="btnDriveLogin" class="btn-top" onclick="driveLogin()">🔐 Drive Login</button>
       <button id="btnDriveLogout" class="btn-top" style="display:none;" onclick="driveLogout()">🚪 Drive Logout</button>
 
-      <!-- ✅ Drive Backup/Restore -->
       <button class="btn-top" onclick="backupToDrive()">☁ Backup</button>
       <button class="btn-top" onclick="restoreFromDrive()">☁ Restore</button>
 
@@ -52,7 +51,7 @@
     Drive: ❌ Not connected
   </div>
 
-  <!-- ✅ LOGIN LOCK SCREEN -->
+  <!-- LOGIN LOCK SCREEN -->
   <div id="loginLock" style="display:none;min-height:75vh;align-items:center;justify-content:center;flex-direction:column;">
     <div style="background:#fff;padding:16px 18px;border-radius:16px;max-width:420px;width:92%;box-shadow:0 8px 24px rgba(0,0,0,.12);text-align:center;">
       <h2 style="margin:8px 0;color:#263646;">🔐 Login Required</h2>
@@ -248,8 +247,10 @@
   <script src="app.js"></script>
   <script src="gdrive.js"></script>
 
-  <!-- extra small init -->
   <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./service-worker.js");
+    }
     window.addEventListener("load", () => {
       if (window.updateDriveStatusUI) window.updateDriveStatusUI();
     });
