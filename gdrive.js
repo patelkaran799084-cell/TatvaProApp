@@ -1,8 +1,10 @@
 /*************************************************
- * Tatva OS Pro - gdrive.js (FINAL FIXED)
- * ✅ Persistent Login (no re-login on refresh)
- * ✅ Logout button
- * ✅ Calls app.js hook: window.onDriveLoginSuccess()
+ * Tatva OS Pro - gdrive.js (FINAL)
+ * ✅ Persistent Login
+ * ✅ Drive Logout
+ * ✅ Backup + Restore Working
+ * ✅ Calls app.js: onDriveLoginSuccess()
+ * ✅ Calls app.js: applyAppRestoreData()
  *************************************************/
 
 const CLIENT_ID =
@@ -33,11 +35,10 @@ window.updateDriveStatusUI = function () {
       el.innerText = "Drive: ❌ Not connected";
     }
   }
-
   setDriveButtonsUI(ok);
 };
 
-// ✅ script loader
+// load script helper
 async function loadScript(src) {
   return new Promise((resolve, reject) => {
     const s = document.createElement("script");
@@ -69,7 +70,9 @@ async function ensureDriveReady() {
   }
 }
 
-// ✅ restore session after refresh
+/**************
+ * ✅ Restore session after refresh (no login again)
+ **************/
 (function restoreDriveSession() {
   try {
     const token = localStorage.getItem("DRIVE_ACCESS_TOKEN") || "";
@@ -81,11 +84,13 @@ async function ensureDriveReady() {
       window.__driveUserEmail = email;
       window.__driveConnected = true;
 
-      // 🔥 IMPORTANT: unlock app on refresh too
       setTimeout(() => {
         window.updateDriveStatusUI && window.updateDriveStatusUI();
+
+        // unlock app
         if (window.onDriveLoginSuccess) window.onDriveLoginSuccess();
       }, 200);
+
       return;
     }
   } catch (e) {}
@@ -94,6 +99,7 @@ async function ensureDriveReady() {
 })();
 
 function getBackupFileName() {
+  // ✅ Business wise file, same business select => same data
   return window.getBackupFileNameFromApp
     ? window.getBackupFileNameFromApp()
     : "TatvaPro_Main_Backup.json";
@@ -153,8 +159,8 @@ async function uploadBackupJson(jsonStr) {
 
 async function downloadBackupJson() {
   await ensureDriveReady();
-
   const fileId = await findBackupFileId();
+
   if (!fileId) {
     alert("❌ Drive backup file not found (pehla Backup karo)");
     return null;
@@ -169,7 +175,9 @@ async function downloadBackupJson() {
   return await res.text();
 }
 
-// ✅ Drive Login
+/**************
+ * ✅ Drive Login
+ **************/
 window.driveLogin = async function () {
   try {
     await initDriveClient();
@@ -198,7 +206,7 @@ window.driveLogin = async function () {
 
         gapi.client.setToken({ access_token: token });
 
-        // get email
+        // email
         try {
           const me = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
             headers: { Authorization: "Bearer " + token },
@@ -210,7 +218,7 @@ window.driveLogin = async function () {
 
         window.updateDriveStatusUI && window.updateDriveStatusUI();
 
-        // 🔥 MOST IMPORTANT: unlock app
+        // unlock
         if (window.onDriveLoginSuccess) window.onDriveLoginSuccess();
       },
     });
@@ -222,7 +230,9 @@ window.driveLogin = async function () {
   }
 };
 
-// ✅ Drive Logout
+/**************
+ * ✅ Drive Logout
+ **************/
 window.driveLogout = async function () {
   try {
     const token =
@@ -255,14 +265,16 @@ window.driveLogout = async function () {
     }
 
     window.updateDriveStatusUI && window.updateDriveStatusUI();
-    location.reload(); // simple & safe
+    location.reload();
   } catch (err) {
     console.error(err);
     alert("❌ Logout failed");
   }
 };
 
-// BACKUP
+/**************
+ * ✅ Backup
+ **************/
 window.backupToDrive = async function (dataObj) {
   try {
     if (!window.__driveConnected || !window.__driveAccessToken) {
@@ -278,23 +290,26 @@ window.backupToDrive = async function (dataObj) {
   }
 };
 
-// RESTORE
+/**************
+ * ✅ Restore
+ **************/
 window.restoreFromDrive = async function () {
   try {
     if (!window.__driveConnected || !window.__driveAccessToken) {
       alert("❌ Please Drive Login first");
       return;
     }
+
     const jsonStr = await downloadBackupJson();
     if (!jsonStr) return;
 
     const dataObj = JSON.parse(jsonStr);
 
+    // ✅ THIS IS THE FIX
     if (window.applyAppRestoreData) {
       window.applyAppRestoreData(dataObj);
-      alert("✅ Restore successful");
     } else {
-      alert("❌ Restore handler not found in app.js");
+      alert("❌ app.js missing: applyAppRestoreData()");
     }
   } catch (err) {
     console.error(err);
