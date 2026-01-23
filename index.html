@@ -14,222 +14,257 @@
 
   <!-- TOP BAR -->
   <div class="topbar">
-    <div class="brand">
-      <span class="dot"></span>
-      <span class="title">Tatva OS Pro</span>
+    <div class="left">
+      <div class="brand">Tatva OS Pro</div>
+      <div id="driveStatus" class="smalltext">Drive: ❌ Not connected</div>
     </div>
 
-    <div class="actions" id="topActions">
-      <!-- ✅ Business switch (Only businesses matching login email will show) -->
-      <select id="bizSelect" class="btn-top" onchange="switchBusinessFromUI()"></select>
+    <div class="right">
+      <!-- ✅ Drive Login/Logout -->
+      <button id="btnDriveLogin" class="btn-top" onclick="driveLogin()">🔐 Drive Login</button>
+      <button id="btnDriveLogout" class="btn-top" style="display:none;" onclick="driveLogout()">🚪 Drive Logout</button>
 
-      <!-- ✅ ADMIN only -->
-      <button id="btnBiz" class="btn-top" style="display:none;" onclick="openBusinessMgr()">🏢 Business</button>
-
-      <button class="btn-top" onclick="openTeamMgr()">👥 Team</button>
-      <button class="btn-top" onclick="openCategoryMgr()">🗂 Category</button>
-
-      <!-- DRIVE -->
-      <button class="btn-top" onclick="driveLogin()">🔐 Drive Login</button>
       <button class="btn-top" onclick="backupToDrive(collectAppBackupData())">☁ Backup</button>
       <button class="btn-top" onclick="restoreFromDrive()">☁ Restore</button>
 
-      <!-- LOCAL -->
-      <button class="btn-top" onclick="backupData()">⬇ Save</button>
-      <label class="btn-top" style="cursor:pointer;">
-        ⬆ Load
-        <input type="file" accept=".json" style="display:none" onchange="restoreData(this)" />
-      </label>
+      <button class="btn-top" onclick="openBusinessMgr()">🏢 Business</button>
+      <button class="btn-top" onclick="openCategoryMgr()">🗂 Category</button>
     </div>
   </div>
 
-  <!-- DRIVE STATUS -->
-  <div id="driveStatus" style="font-size:12px;color:#ddd;margin:6px 14px;">
-    Drive: Not connected
-  </div>
+  <!-- MAIN -->
+  <div class="container">
 
-  <!-- ✅ LOGIN LOCK SCREEN -->
-  <div id="loginLock" style="display:none;min-height:75vh;align-items:center;justify-content:center;flex-direction:column;">
-    <div style="background:#fff;padding:16px 18px;border-radius:16px;max-width:420px;width:92%;box-shadow:0 8px 24px rgba(0,0,0,.12);text-align:center;">
-      <h2 style="margin:8px 0;color:#263646;">🔐 Login Required</h2>
-      <p style="margin:0 0 12px;color:#666;line-height:1.5;">
-        App use karva mate pehla <b>Drive Login</b> required che.
-        Login pachhi tamaru business auto open thase.
-      </p>
-      <button class="btn btn-blue" style="width:100%;padding:10px 12px;font-size:16px;" onclick="driveLogin()">
-        🔐 Drive Login
-      </button>
-      <div style="margin-top:10px;font-size:12px;color:#888;">
-        Admin: patelkaran799084@gmail.com
-      </div>
-    </div>
-  </div>
-
-  <!-- DASHBOARD -->
-  <div class="container" id="mainApp">
-    <div class="stats">
-      <div class="stat-card"><div id="st-orders">0</div><small>Orders</small></div>
-      <div class="stat-card"><div id="st-profit">₹0</div><small>Net Profit</small></div>
-      <div class="stat-card"><div id="st-rev">₹0</div><small>Revenue</small></div>
-      <div class="stat-card"><div id="st-hand">₹0</div><small>Cash Hand</small></div>
-    </div>
-
-    <h3 class="section-title">RECENT ORDERS</h3>
-    <div id="orders-list"></div>
-  </div>
-
-  <!-- FAB -->
-  <button class="fab" id="fabBtn" onclick="openNewOrder()">+</button>
-
-  <!-- NEW ORDER MODAL -->
-  <div id="modal-new" class="modal">
-    <div class="modal-box">
-      <h3>New Order</h3>
-      <input id="new-client" placeholder="Client Name" />
-      <input id="new-work" placeholder="Work Details" />
-      <input id="new-price" type="number" placeholder="Price" />
-      <input id="new-date" type="date" />
+    <!-- BUSINESS SELECT -->
+    <div class="card">
       <div class="row">
-        <button class="btn btn-blue" onclick="createOrder()">Create</button>
-        <button class="btn" onclick="closeModal('modal-new')">Cancel</button>
+        <div class="field">
+          <label>Business</label>
+          <select id="bizSelect" onchange="onBizChanged()"></select>
+        </div>
+        <div class="field">
+          <label>Search</label>
+          <input id="searchInput" type="text" placeholder="Search customer / mobile / item" oninput="renderAll()" />
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- ORDER DETAILS MODAL -->
-  <div id="modal-detail" class="modal">
-    <div class="modal-box big">
-
-      <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <h3 style="margin:0;">Order Details</h3>
-        <button class="btn btn-red btn-sm" onclick="deleteOrder()">Delete</button>
-      </div>
-
-      <div class="row-inputs" style="margin-bottom:10px;">
-        <select id="orderSelect" onchange="onOrderSelectChange()"></select>
-        <button class="btn btn-blue btn-sm" onclick="openNewOrder()">+ New</button>
-      </div>
-
-      <div class="strip">
-        <div><small>Client</small><b id="d-client">-</b></div>
-        <div><small>Work</small><b id="d-work">-</b></div>
-        <div><small>Date</small><b id="d-date">-</b></div>
-      </div>
-
-      <div class="strip" style="margin-top:10px;">
-        <div><small>Received</small><b id="d-recd">₹0</b></div>
-        <div><small>Paid Out</small><b id="d-paid">₹0</b></div>
-        <div><small>Cash Hand</small><b id="d-hand">₹0</b></div>
-      </div>
-
-      <div id="d-pending" class="pending"></div>
-
-      <!-- Tabs -->
-      <div style="display:flex;gap:8px;margin:12px 0;">
-        <button class="btn btn-sm" onclick="switchTab('income')">💰 Income</button>
-        <button class="btn btn-sm" onclick="switchTab('expense')">🧾 Expense</button>
-        <button class="btn btn-sm" onclick="switchTab('summary')">📌 Summary</button>
-      </div>
-
-      <!-- TAB: INCOME -->
-      <div id="tab-income">
-        <h4 style="margin:10px 0 6px;">Income</h4>
-        <div class="row-inputs">
-          <input id="pay-in-date" type="date" />
-          <input id="pay-in-amt" type="number" placeholder="Amount" />
-          <button class="btn btn-blue btn-sm" onclick="addIncome()">Add</button>
+    <!-- SUMMARY -->
+    <div class="grid2">
+      <div class="card">
+        <div class="big">Orders</div>
+        <div class="row">
+          <div class="stat">
+            <div class="label">Total Orders</div>
+            <div id="statOrders" class="value">0</div>
+          </div>
+          <div class="stat">
+            <div class="label">Total Amount</div>
+            <div id="statTotal" class="value">0</div>
+          </div>
         </div>
-        <div id="list-income"></div>
       </div>
 
-      <!-- TAB: EXPENSE -->
-      <div id="tab-expense" style="display:none;">
-        <h4 style="margin:10px 0 6px;">Expenses / Tasks</h4>
-        <div class="row-inputs">
-          <select id="task-type"></select>
-          <select id="task-artist"></select>
-          <input id="task-cost" type="number" placeholder="Cost" />
-          <button class="btn btn-blue btn-sm" onclick="addTask()">Add</button>
+      <div class="card">
+        <div class="big">Net</div>
+        <div class="row">
+          <div class="stat">
+            <div class="label">Income</div>
+            <div id="statIncome" class="value">0</div>
+          </div>
+          <div class="stat">
+            <div class="label">Expense</div>
+            <div id="statExpense" class="value">0</div>
+          </div>
+          <div class="stat">
+            <div class="label">Net</div>
+            <div id="statNet" class="value">0</div>
+          </div>
         </div>
-        <div style="font-size:12px;color:#666;margin-top:6px;">
-          Category add/remove → Top bar "🗂 Category"
-        </div>
-        <div id="list-tasks"></div>
-      </div>
-
-      <!-- TAB: SUMMARY -->
-      <div id="tab-summary" style="display:none;">
-        <h4 style="margin:10px 0 6px;">Payment History</h4>
-        <details style="background:#fff;border:1px solid #eee;border-radius:12px;padding:10px;margin-top:8px;">
-          <summary style="cursor:pointer;font-weight:800;">Client Income History</summary>
-          <div id="hist-income" style="margin-top:10px;"></div>
-        </details>
-        <details style="background:#fff;border:1px solid #eee;border-radius:12px;padding:10px;margin-top:10px;">
-          <summary style="cursor:pointer;font-weight:800;">Task Payments History</summary>
-          <div id="hist-expense" style="margin-top:10px;"></div>
-        </details>
-      </div>
-
-      <div class="row" style="margin-top:14px;">
-        <button class="btn btn-green" onclick="markDone()">Auto Settle</button>
-        <button class="btn" onclick="closeModal('modal-detail')">Close</button>
       </div>
     </div>
-  </div>
 
-  <!-- TEAM MODAL -->
-  <div id="overlay-team" class="overlay" style="display:none;">
-    <div class="modal-box">
-      <h3>Team</h3>
-      <div id="list-team"></div>
-      <div class="row-inputs">
-        <input id="team-new" placeholder="New Member" />
-        <button class="btn btn-blue btn-sm" onclick="addTeam()">Add</button>
-      </div>
+    <!-- ACTIONS -->
+    <div class="card">
       <div class="row">
-        <button class="btn" onclick="document.getElementById('overlay-team').style.display='none'">Close</button>
+        <button class="btn" onclick="openAddOrder()">➕ Add Order</button>
+        <button class="btn" onclick="openIncome()">➕ Add Income</button>
+        <button class="btn" onclick="openExpense()">➖ Add Expense</button>
+        <button class="btn" onclick="exportExcel()">📤 Export</button>
       </div>
     </div>
+
+    <!-- ORDERS LIST -->
+    <div class="card">
+      <div class="big">Orders List</div>
+      <div id="ordersList" class="list"></div>
+    </div>
+
+    <!-- INCOME LIST -->
+    <div class="card">
+      <div class="big">Income List</div>
+      <div id="incomeList" class="list"></div>
+    </div>
+
+    <!-- EXPENSE LIST -->
+    <div class="card">
+      <div class="big">Expense List</div>
+      <div id="expenseList" class="list"></div>
+    </div>
+
   </div>
 
-  <!-- CATEGORY MODAL -->
-  <div id="overlay-cat" class="overlay" style="display:none;">
-    <div class="modal-box">
-      <h3>Task Categories</h3>
-      <div id="list-cat"></div>
-      <div class="row-inputs">
-        <input id="cat-new" placeholder="New Category" />
-        <button class="btn btn-blue btn-sm" onclick="addCategory()">Add</button>
-      </div>
+  <!-- OVERLAY: ADD ORDER -->
+  <div id="overlay-order" class="overlay" style="display:none;">
+    <div class="modal">
+      <div class="big">Add Order</div>
+
       <div class="row">
-        <button class="btn" onclick="document.getElementById('overlay-cat').style.display='none'">Close</button>
+        <div class="field">
+          <label>Date</label>
+          <input id="ordDate" type="date" />
+        </div>
+        <div class="field">
+          <label>Customer Name</label>
+          <input id="ordName" type="text" placeholder="Name" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Mobile</label>
+          <input id="ordMobile" type="text" placeholder="Mobile" />
+        </div>
+        <div class="field">
+          <label>Category</label>
+          <select id="ordCategory"></select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Item</label>
+          <input id="ordItem" type="text" placeholder="Item details" />
+        </div>
+        <div class="field">
+          <label>Amount</label>
+          <input id="ordAmount" type="number" placeholder="Amount" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Status</label>
+          <select id="ordStatus">
+            <option value="Pending">Pending</option>
+            <option value="Done">Done</option>
+            <option value="Cancel">Cancel</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Note</label>
+          <input id="ordNote" type="text" placeholder="Note" />
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="btn" onclick="saveOrder()">✅ Save</button>
+        <button class="btn" onclick="document.getElementById('overlay-order').style.display='none'">Close</button>
       </div>
     </div>
   </div>
 
-  <!-- ✅ BUSINESS MANAGER (ADMIN PIN) -->
+  <!-- OVERLAY: INCOME -->
+  <div id="overlay-income" class="overlay" style="display:none;">
+    <div class="modal">
+      <div class="big">Add Income</div>
+
+      <div class="row">
+        <div class="field">
+          <label>Date</label>
+          <input id="incDate" type="date" />
+        </div>
+        <div class="field">
+          <label>Title</label>
+          <input id="incTitle" type="text" placeholder="Income title" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Amount</label>
+          <input id="incAmount" type="number" placeholder="Amount" />
+        </div>
+        <div class="field">
+          <label>Note</label>
+          <input id="incNote" type="text" placeholder="Note" />
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="btn" onclick="saveIncome()">✅ Save</button>
+        <button class="btn" onclick="document.getElementById('overlay-income').style.display='none'">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- OVERLAY: EXPENSE -->
+  <div id="overlay-expense" class="overlay" style="display:none;">
+    <div class="modal">
+      <div class="big">Add Expense</div>
+
+      <div class="row">
+        <div class="field">
+          <label>Date</label>
+          <input id="expDate" type="date" />
+        </div>
+        <div class="field">
+          <label>Title</label>
+          <input id="expTitle" type="text" placeholder="Expense title" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Amount</label>
+          <input id="expAmount" type="number" placeholder="Amount" />
+        </div>
+        <div class="field">
+          <label>Note</label>
+          <input id="expNote" type="text" placeholder="Note" />
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="btn" onclick="saveExpense()">✅ Save</button>
+        <button class="btn" onclick="document.getElementById('overlay-expense').style.display='none'">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- OVERLAY: BUSINESS MANAGER -->
   <div id="overlay-biz" class="overlay" style="display:none;">
-    <div class="modal-box">
-      <h3>Business Manager (Admin)</h3>
+    <div class="modal wide">
+      <div class="big">Business Manager</div>
 
-      <div id="biz-info" style="font-size:12px;color:#666;margin-bottom:8px;"></div>
-
-      <div class="row-inputs">
-        <input id="biz-pin" type="password" inputmode="numeric" placeholder="Admin PIN" />
-        <button class="btn btn-blue btn-sm" onclick="unlockBizAdmin()">Unlock</button>
+      <div class="row">
+        <div class="field">
+          <label>New Business Name</label>
+          <input id="newBizName" type="text" placeholder="Business name" />
+        </div>
+        <div class="field">
+          <label>Owner Email</label>
+          <input id="newBizOwnerEmail" type="email" placeholder="owner@gmail.com" />
+        </div>
       </div>
 
-      <div id="biz-panel" style="display:none;margin-top:12px;">
-        <h4 style="margin:0 0 8px;">All Businesses</h4>
-        <div id="biz-list"></div>
+      <div class="row">
+        <button class="btn" onclick="addBusiness()">➕ Add Business</button>
+        <button class="btn" onclick="deleteBusiness()">🗑 Delete Selected</button>
+      </div>
 
-        <h4 style="margin:14px 0 6px;">Add New Business</h4>
-        <div class="row-inputs">
-          <input id="biz-new-name" placeholder="Business Name" />
-          <input id="biz-new-owner" placeholder="Owner Email (bhai gmail)" />
-          <button class="btn btn-blue btn-sm" onclick="addBusiness()">Add</button>
-        </div>
-        <div style="font-size:12px;color:#666;margin-top:6px;">
+      <div class="note">
+        <div class="smalltext">
           Owner Email match login email ⇒ only that business visible.
         </div>
       </div>
@@ -240,7 +275,44 @@
     </div>
   </div>
 
+  <!-- OVERLAY: CATEGORY MANAGER -->
+  <div id="overlay-cat" class="overlay" style="display:none;">
+    <div class="modal wide">
+      <div class="big">Category Manager</div>
+
+      <div class="row">
+        <div class="field">
+          <label>New Category Name</label>
+          <input id="newCatName" type="text" placeholder="Category name" />
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="btn" onclick="addCategory()">➕ Add Category</button>
+        <button class="btn" onclick="deleteCategory()">🗑 Delete Selected</button>
+      </div>
+
+      <div class="row">
+        <button class="btn" onclick="document.getElementById('overlay-cat').style.display='none'">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPTS -->
   <script src="app.js"></script>
   <script src="gdrive.js"></script>
+
+  <!-- ✅ PWA Service Worker Register (Fix update issue on phone) -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./service-worker.js");
+    }
+
+    // Update UI at load
+    window.addEventListener("load", () => {
+      if (window.updateDriveStatusUI) window.updateDriveStatusUI();
+    });
+  </script>
+
 </body>
 </html>
