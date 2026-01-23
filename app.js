@@ -120,6 +120,7 @@ window.switchBusinessFromUI = function () {
   const meta = loadBizMeta();
   meta.activeBizId = sel.value;
   saveBizMeta(meta);
+  if (window.renderBizDropdown) window.renderBizDropdown();
 
   loadDBForActiveBusiness();
   renderHome();
@@ -687,6 +688,7 @@ window.setActiveBusiness = function (bizId) {
   const meta = loadBizMeta();
   meta.activeBizId = bizId;
   saveBizMeta(meta);
+  if (window.renderBizDropdown) window.renderBizDropdown();
 
   loadDBForActiveBusiness();
   renderHome();
@@ -705,6 +707,7 @@ window.deleteBusiness = function (bizId) {
 
   if (meta.activeBizId === bizId) meta.activeBizId = meta.businesses[0].id;
   saveBizMeta(meta);
+  if (window.renderBizDropdown) window.renderBizDropdown();
 
   loadDBForActiveBusiness();
   renderHome();
