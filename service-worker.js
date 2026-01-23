@@ -1,10 +1,12 @@
-// Tatva Pro - Service Worker (UPDATED)
-// ✅ Fix: phone stuck on old cache
+// Tatva OS Pro - Service Worker (FINAL)
+// ✅ Fix: phone old cache issue
 // ✅ Network-first for core files
-// ✅ Auto update (skipWaiting + clientsClaim)
+// ✅ Cache fallback for offline
+// ✅ Auto delete old caches
 
-const CACHE_NAME = "tatva-pro-v42"; // 🔥 change this every update!
+const CACHE_NAME = "tatva-os-pro-v60"; // 🔥 CHANGE THIS NUMBER ON EVERY UPDATE!
 
+// Core files that must always update
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -26,9 +28,11 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
-      // remove old cache
+      // delete old caches
       const keys = await caches.keys();
-      await Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : null)));
+      await Promise.all(
+        keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : null))
+      );
 
       await self.clients.claim();
     })()
@@ -39,16 +43,21 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
 
-  // Only GET
+  // Only handle GET
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
 
-  const isCore =
-    url.pathname.endsWith("/") ||
-    CORE_ASSETS.some((a) => url.pathname.endsWith(a.replace("./", "/")));
+  // Only cache same-origin
+  if (url.origin !== self.location.origin) return;
 
-  // ✅ Network-first for core assets (so updates work)
+  const pathname = url.pathname;
+
+  // ✅ Network-first for core assets (so updates come immediately)
+  const isCore =
+    pathname === "/" ||
+    CORE_ASSETS.some((p) => pathname.endsWith(p.replace("./", "")));
+
   if (isCore) {
     event.respondWith(
       (async () => {
@@ -58,6 +67,7 @@ self.addEventListener("fetch", (event) => {
           cache.put(req, fresh.clone());
           return fresh;
         } catch (e) {
+          // offline fallback
           const cached = await caches.match(req);
           return cached || caches.match("./index.html");
         }
